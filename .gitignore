@@ -1,0 +1,13 @@
+.vscode
+dist
+build
+__pycache__
+*.egg-info
+*.pdb
+test.py
+*.pyd
+test_sampling
+*.csv
+*.stl
+*.png
+*.svg
