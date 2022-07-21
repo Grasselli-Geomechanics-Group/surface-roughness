@@ -6,7 +6,6 @@ import pandas as pd
 from scipy.spatial.transform import Rotation
 from scipy.stats import gaussian_kde
 from scipy.spatial import ConvexHull
-import pptk
 
 from .roughness_impl import (
     _rs,
@@ -62,7 +61,8 @@ class Surface:
         return np.vstack([self.points.min(axis=0),self.points.max(axis=0)])
     
     def plot(self):
-        return pptk.viewer(self.points)
+        # return pptk.viewer(self.points)
+        pass
     
     def preprocess(self):
         if self.verbose:
