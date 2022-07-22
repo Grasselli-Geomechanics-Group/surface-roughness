@@ -6,7 +6,7 @@
 #include <unordered_map>
 #include <tuple>
 
-#include <armadillo>
+#include <Eigen/Core>
 
 struct TIN_triangle
 {
@@ -24,7 +24,7 @@ struct TIN_triangle
 	*
 	*/
 
-	TIN_triangle(int index, arma::vec normal, double area) :
+	TIN_triangle(int index, Eigen::Vector3d normal, double area) :
 		index(index), area(area),apparent_dip_angle(0)
 	{
 		normal_x = normal(0);
@@ -38,6 +38,13 @@ struct TIN_triangle
 		// dip_slope is perpendicular to normal slope and needs to be positive
 		// therefore get the absolute of inverse  of normal_slope
 		//true_dip_slope = std::abs(horizontal_radius/(normal(2)));
+	}
+	inline void set_normal(Eigen::RowVector3d normal) {
+		this->normal_x = normal(0);
+		this->normal_y = normal(1);
+		this->normal_z = normal(2);
+		normal_angle = std::atan2(normal_y,normal_x);
+		if (normal_angle < 0) normal_angle += 2*M_PI;
 	}
 	inline void set_normal(double normal_x, double normal_y,double normal_z) {
 		this->normal_x = normal_x;
@@ -63,9 +70,7 @@ struct TIN_triangle
 
 		// Get angle between projected normal vector and shear direction
 		apparent_dip_angle =  std::acos(shear_dir_x*(Prx)+shear_dir_y * (Pry)) - M_PI_2;
-
 	}
-
 };
 
 struct TINBasedRoughness_settings : public std::unordered_map<std::string,double>
@@ -83,26 +88,26 @@ struct TINBasedRoughness_settings : public std::unordered_map<std::string,double
 class TINBasedRoughness
 {
 public:
-	TINBasedRoughness(const std::vector<double>& points, const std::vector<uint64_t>& triangles);
-	TINBasedRoughness(const std::vector<double>& points, const std::vector<uint64_t>& triangles, const std::vector<uint64_t>& selected_triangles);
+	TINBasedRoughness(Eigen::MatrixX3d points, Eigen::MatrixX3i triangles);
+	// TINBasedRoughness(const std::vector<double>& points, const std::vector<uint64_t>& triangles, const std::vector<uint64_t>& selected_triangles);
 	void evaluate(TINBasedRoughness_settings settings = TINBasedRoughness_settings(),bool verbose=false, std::string file=std::string());
-    std::vector<double> operator[](std::string key) {return parameters[key];}
-    std::vector<double> get_points();
-    std::vector<double> get_normals();
+    Eigen::ArrayXd operator[](std::string key) {return parameters[key];}
+    Eigen::MatrixX3d get_points() {return points;}
+    Eigen::MatrixX3d get_normals() {return normals;}
 
-	std::vector<double> get_min_bounds() {return min_bounds;}
-	std::vector<double> get_max_bounds() {return max_bounds;}
-	std::vector<double> get_centroid() {return centroid;}
+	Eigen::Vector3d get_min_bounds() {return min_bounds;}
+	Eigen::Vector3d get_max_bounds() {return max_bounds;}
+	Eigen::Vector3d get_centroid() {return centroid;}
 	std::vector<double> get_size() {return size_;}
 	double get_area() {return total_area;}
 
-	std::vector<double> get_final_orientation() { return final_orientation; }
+	Eigen::Vector3d get_final_orientation() { return final_orientation; }
     std::vector<std::string> result_keys();
 
 private:
-    arma::mat points;
-    arma::Mat<arma::uword> triangles;
-    arma::mat normals;
+    Eigen::MatrixX3d points;
+    Eigen::MatrixX3i triangles;
+    Eigen::MatrixX3d normals;
 	std::vector<uint8_t> triangle_mask;
 
     std::vector<double> areas;
@@ -111,31 +116,31 @@ private:
 	bool save_file(std::string file_path);
 	
 	TINBasedRoughness_settings settings_;
-    std::unordered_map<std::string,std::vector<double>> parameters;
+    std::unordered_map<std::string,Eigen::ArrayXd> parameters;
 
 	
-	arma::mat pol2cart(arma::vec azimuths);
+	Eigen::MatrixX2d pol2cart(Eigen::ArrayXd azimuths);
     void alignBestFit();
     void calculateNormals();
     void calculateAreas();
 
-    arma::vec plane_fit(const arma::mat& xyz);
-    arma::vec plane_normal(const arma::mat& xyz);
-	std::vector<double> initial_orientation;
-	std::vector<double> final_orientation;
+    Eigen::Vector3d plane_fit(const Eigen::MatrixX3d& xyz);
+    Eigen::Vector3d plane_normal(const Eigen::MatrixX3d& xyz);
+	Eigen::Vector3d initial_orientation;
+	Eigen::Vector3d final_orientation;
 
-	std::vector<double> min_bounds;
-	std::vector<double> max_bounds;
-	std::vector<double> centroid;
+	Eigen::Vector3d min_bounds;
+	Eigen::Vector3d max_bounds;
+	Eigen::Vector3d centroid;
 	std::vector<double> size_;
 
 	bool aligned;
 
 	// Collected parameters
-	arma::vec azimuths_;
-	arma::vec delta_t_;
-	arma::vec delta_star_t_;
-	arma::uvec n_facing_triangles_;
+	Eigen::ArrayXd azimuths_;
+	Eigen::ArrayXd delta_t_;
+	Eigen::ArrayXd delta_star_t_;
+	Eigen::ArrayXd n_facing_triangles_;
 };
 
 #endif //_TINBASEDROUGHNESS_H

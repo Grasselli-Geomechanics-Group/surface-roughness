@@ -5,7 +5,7 @@
 #include <math.h>
 #include <unordered_map>
 
-#include <armadillo>
+#include <eigen/core>
 
 struct Directional_triangle
 {
@@ -23,7 +23,7 @@ struct Directional_triangle
 	*
 	*/
 
-	Directional_triangle(int index, arma::vec normal, double area) :
+	Directional_triangle(int index, Eigen::Vector3d normal, double area) :
 		index(index), area(area),apparent_dip_angle(0)
 	{
 
@@ -105,9 +105,9 @@ public:
     std::vector<std::string> result_keys();
 
 private:
-    arma::mat points;
-    arma::Mat<arma::uword> triangles;
-    arma::mat normals;
+    Eigen::MatrixX3d points;
+    Eigen::MatrixX3i triangles;
+    Eigen::MatrixX3d normals;
 	std::vector<uint8_t> triangle_mask;
 
     std::vector<double> areas;
@@ -118,7 +118,7 @@ private:
 	DirectionalRoughness_settings settings_;
     std::unordered_map<std::string,std::vector<double>> parameters;
 
-	arma::mat pol2cart(arma::vec azimuths);
+	Eigen::MatrixX2d pol2cart(Eigen::ArrayXf azimuths);
     void alignBestFit();
     void calculateNormals();
     void calculateAreas();
@@ -126,8 +126,8 @@ private:
 	double C_param_Newton_opt_backtracking_Fit(arma::uword az_i);
 	double calculateGOFPValue(arma::vec& observed, double C, double theta_max, double a_0);
     
-    arma::vec plane_fit(const arma::mat& xyz);
-    arma::vec plane_normal(const arma::mat& xyz);
+    Eigen::Vector3d plane_fit(const Eigen::MatrixX3d& xyz);
+    Eigen::Vector3d plane_normal(const Eigen::MatrixX3d& xyz);
 	std::vector<double> initial_orientation;
 	std::vector<double> final_orientation;
 

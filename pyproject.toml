@@ -1,5 +1,5 @@
 [project]
-name = "Surface Roughness"
+name = "surface_roughness"
 version = "0.0.1"
 description = "Surface roughness calculator for Python"
 readme = "README.md"

@@ -5,7 +5,7 @@
 #include <algorithm>
 #include <iterator>
 
-#include <armadillo>
+#include <eigen/core>
 
 DirectionalRoughness::DirectionalRoughness(
 	const std::vector<double>& points, 
@@ -453,15 +453,15 @@ double DirectionalRoughness::calculateGOFPValue(arma::vec& observed, double C, d
 	return chisqr((unsigned int)bins_.n_elem - 1, chi_sq);
 }
 
-arma::mat DirectionalRoughness::pol2cart(arma::vec azimuth) 
+Eigen::MatrixX2d DirectionalRoughness::pol2cart(Eigen::ArrayXf& azimuth) 
 {
-	using namespace arma;
+	using namespace Eigen;
 	// Polar to cartesian transformation by vector
-	vec Tx = cos(azimuth);
-	vec Ty = sin(azimuth);
+	ArrayXf Tx = azimuth.cos();
+	ArrayXf Ty = azimuth.sin();
 
-	mat T;
-	T = join_horiz(Tx, Ty);
+	MatrixX2d T(Tx.rows(),2);
+	T << Tx,Ty;
 	return T;
 }
 

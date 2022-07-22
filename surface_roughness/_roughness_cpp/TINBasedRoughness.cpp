@@ -5,197 +5,164 @@
 #include <execution>
 #include <iterator>
 #include <functional>
+#include <algorithm>
+#include <iostream>
+#include <fstream>
 
-#include <armadillo>
+#include <Eigen/Core>
+#include <Eigen/Geometry>
 
 TINBasedRoughness::TINBasedRoughness(
-    const std::vector<double>& points, 
-    const std::vector<uint64_t>& triangles) :
-	aligned(false)
+    Eigen::MatrixX3d points, 
+    Eigen::MatrixX3i triangles) :
+	aligned(false),
+	points(points),
+	triangles(triangles)
 {
-    using namespace arma;
-    this->points = conv_to<mat>::from(points);
-    this->points = reshape(this->points,points.size()/3,3);
-    this->triangles = conv_to<Mat<uint64_t>>::from(triangles);
-    this->triangles = reshape(this->triangles, triangles.size()/3,3);
     this->alignBestFit();
     this->calculateNormals();
 }
 
-TINBasedRoughness::TINBasedRoughness(
-    const std::vector<double>& points, 
-    const std::vector<uint64_t>& triangles,
-    const std::vector<uint64_t>& selected_triangles):
-	aligned(false)
-{
-	using namespace arma;
+// TINBasedRoughness::TINBasedRoughness(
+//     const std::vector<double>& points, 
+//     const std::vector<uint64_t>& triangles,
+//     const std::vector<uint64_t>& selected_triangles):
+// 	aligned(false)
+// {
+// 	using namespace arma;
 	
-	arma::uword n_triangles = (arma::uword)selected_triangles.size();
-	size_t triangles_in_n_rows = triangles.size()/3;
-	this->triangles.resize(n_triangles,3);
-	for (auto tri_it = selected_triangles.begin(); tri_it != selected_triangles.end(); ++tri_it) {
-		arma::uword index = (arma::uword) std::distance(selected_triangles.begin(),tri_it);
-		this->triangles.row(index) = 
-			{triangles.at(*tri_it),
-			triangles.at(*tri_it + triangles_in_n_rows),
-			triangles.at(*tri_it + 2*triangles_in_n_rows)};
-	}
+// 	arma::uword n_triangles = (arma::uword)selected_triangles.size();
+// 	size_t triangles_in_n_rows = triangles.size()/3;
+// 	this->triangles.resize(n_triangles,3);
+// 	for (auto tri_it = selected_triangles.begin(); tri_it != selected_triangles.end(); ++tri_it) {
+// 		arma::uword index = (arma::uword) std::distance(selected_triangles.begin(),tri_it);
+// 		this->triangles.row(index) = 
+// 			{triangles.at(*tri_it),
+// 			triangles.at(*tri_it + triangles_in_n_rows),
+// 			triangles.at(*tri_it + 2*triangles_in_n_rows)};
+// 	}
 
-	// Get vector of all unique points
-	arma::Col<uint64_t> point_indices = vectorise(this->triangles);
-	point_indices = sort(unique(point_indices));
-	std::vector<std::pair<uint64_t,uint64_t>> p_init;
-	std::vector<uint64_t> new_vals(point_indices.n_rows); std::iota(new_vals.begin(),new_vals.end(), 0);
-	std::transform(
-		point_indices.begin(),point_indices.end(),
-		new_vals.begin(),std::back_inserter(p_init),
-		[](const auto& a, const auto& b) 
-		{ return std::make_pair(a,b); });
+// 	// Get vector of all unique points
+// 	arma::Col<uint64_t> point_indices = vectorise(this->triangles);
+// 	point_indices = sort(unique(point_indices));
+// 	std::vector<std::pair<uint64_t,uint64_t>> p_init;
+// 	std::vector<uint64_t> new_vals(point_indices.n_rows); std::iota(new_vals.begin(),new_vals.end(), 0);
+// 	std::transform(
+// 		point_indices.begin(),point_indices.end(),
+// 		new_vals.begin(),std::back_inserter(p_init),
+// 		[](const auto& a, const auto& b) 
+// 		{ return std::make_pair(a,b); });
 
-	std::unordered_map<uint64_t,uint64_t> pindex_find(p_init.begin(),p_init.end());
+// 	std::unordered_map<uint64_t,uint64_t> pindex_find(p_init.begin(),p_init.end());
 	
-	// Copy points
-	arma::uword n_points = points.size()/3;
-	this->points.resize(point_indices.n_rows, 3);
-	for (auto point_index = point_indices.begin(); point_index != point_indices.end(); ++point_index)
-		this->points.row(point_index - point_indices.begin()) = 
-		{points.at(*point_index),
-		points.at(*point_index + n_points),
-		points.at(*point_index + 2*n_points)};
+// 	// Copy points
+// 	arma::uword n_points = points.size()/3;
+// 	this->points.resize(point_indices.n_rows, 3);
+// 	for (auto point_index = point_indices.begin(); point_index != point_indices.end(); ++point_index)
+// 		this->points.row(point_index - point_indices.begin()) = 
+// 		{points.at(*point_index),
+// 		points.at(*point_index + n_points),
+// 		points.at(*point_index + 2*n_points)};
 	
-	// Reconfigure triangles to current point index
-	this->triangles.for_each([&](Mat<uint64_t>::elem_type& val) {
-		val = pindex_find.at(val);
-	});
+// 	// Reconfigure triangles to current point index
+// 	this->triangles.for_each([&](Mat<uint64_t>::elem_type& val) {
+// 		val = pindex_find.at(val);
+// 	});
 
-    this->alignBestFit();
-    this->calculateNormals();
-}
+//     this->alignBestFit();
+//     this->calculateNormals();
+// }
 
-std::vector<double> TINBasedRoughness::get_points()
-{
-    arma::rowvec pout = points.as_row();
-    return arma::conv_to<std::vector<double>>::from(pout);
-}
-
-std::vector<double> TINBasedRoughness::get_normals()
-{
-    arma::rowvec nout = normals.as_row();
-    return arma::conv_to<std::vector<double>>::from(nout);
-}
-
-arma::vec TINBasedRoughness::plane_fit(const arma::mat& xyz) {
-    using namespace arma;
+Eigen::Vector3d TINBasedRoughness::plane_fit(const Eigen::MatrixX3d& xyz) {
+    using namespace Eigen;
     // Plane fit methodology
     // https://math.stackexchange.com/questions/99299/best-fitting-plane-given-a-set-of-points
-    dmat U;
-    dvec s;
-    dmat V;
-    dmat data;
-    if (xyz.n_cols == 3) {
-        data = xyz.t();
-    }
-    else {
-        data = xyz;
-    }
-    dvec centroid = mean(data,1);
-    data.each_col() -= centroid;
+    Matrix3d U;
+    Vector3d s;
+    Matrix3d V;
+    
+	MatrixX3d data = xyz;
+    RowVector3d centroid = data.colwise().mean();
+    data.rowwise() -= centroid;
 
-    svd_econ(U, s, V, data,"left");
-    dvec normal = U.col(s.index_min());
-    double d = -1.0*sum(centroid % normal);
-    dvec plane_norm = { normal(0),normal(1),d };
-    plane_norm /= -normal(2);
-    // Return  (vector order not same as MATLAB)
-    // vector z = n_x * x + n_y * y + n_0
-    // [ n_x ]
-    // [ n_y ]
-    // [ n_0 ]
-    return plane_norm;
+	JacobiSVD<Matrix3Xd, ComputeThinU | ComputeThinV> svd(data.transpose());
+    
+	Vector3d normal = svd.matrixU().col(2);
+	if (normal(2) < 0) normal *= -1.;
+    // [ n_x ][ n_y ][ n_z ]
+    return normal;
 }
 
-arma::vec TINBasedRoughness::plane_normal(const arma::mat& xyz) {
-    using namespace arma;
-    dvec fit = plane_fit(xyz);
-    dvec normal = { -fit(0), -fit(1), 1 };
-    return normalise(normal);
+Eigen::Vector3d TINBasedRoughness::plane_normal(const Eigen::MatrixX3d& xyz) {
+    using namespace Eigen;
+    Vector3d fit = plane_fit(xyz);
+    return fit.normalized();
 }
 
 void TINBasedRoughness::alignBestFit()
 {
-	if (!aligned) {
-		using namespace arma;
-		arma::rowvec centroid = mean(this->points);
+	if (!this->aligned) {
+		using namespace Eigen;
+		Vector3d centroid = this->points.colwise().mean();
 
-		arma::vec initial_orientation = plane_normal(points);
-		vec current_orientation = initial_orientation;
+		this->initial_orientation = plane_normal(this->points);
+		Vector3d current_orientation = initial_orientation;
 		// Rotate 3 times to improve accuracy
 		for (int rep = 0; rep < 3; ++rep) {
-			
-			double sin_theta = std::sqrt(
+			double theta = -std::asin(
 				current_orientation(0)*current_orientation(0) +
 				current_orientation(1)*current_orientation(1));
-			double cos_theta = std::sqrt(1.0 - sin_theta * sin_theta);
 
-			arma::vec rot_axis = { current_orientation(1),-current_orientation(0),0 };
-			rot_axis = normalise(rot_axis);
-			double l = rot_axis(0);
-			double m = rot_axis(1);
-			double n = rot_axis(2);
+			Vector3d rot_axis(current_orientation(1),-current_orientation(0),0);
+			rot_axis = rot_axis.normalized();
 
 			// Calculate rotation matrix
-			arma::mat rot_matrix = {
-				{l*l*(1.0 - cos_theta) + cos_theta, m*l*(1.0 - cos_theta) - n * sin_theta, n*l*(1.0 - cos_theta) + m * sin_theta},
-				{l*m*(1.0 - cos_theta) + n * sin_theta, m*m*(1.0 - cos_theta) + cos_theta, n*m*(1.0 - cos_theta) - l * sin_theta},
-				{l*n*(1.0 - cos_theta) - m * sin_theta, m*n*(1.0 - cos_theta) + l * sin_theta, n*n*(1.0 - cos_theta) + cos_theta}
-			};
+			AngleAxis<double> rotation(theta,rot_axis);
 			
-			points.each_row();
 			// Rotate points
-			points.each_row([&rot_matrix](rowvec& point) {
-				point = trans(rot_matrix * point.t());
-			});
+			this->points = (rotation.matrix() * this->points.transpose()).transpose();
 			
 			current_orientation = plane_normal(points);
 		}
 		typedef std::vector<double> std_dvec;
-		final_orientation = arma::conv_to<std_dvec>::from(current_orientation);
+		this->final_orientation = current_orientation;
 
-		min_bounds = arma::conv_to<std_dvec>::from(trans(min(points)));
-		max_bounds = arma::conv_to<std_dvec>::from(trans(max(points)));
-		this->centroid = arma::conv_to<std_dvec>::from(trans(mean(points)));
-		std::transform(
-			max_bounds.begin(),max_bounds.end(),
-			min_bounds.begin(),std::back_inserter(size_),
-			std::minus<double>());
-		aligned = true;
+		this->min_bounds = points.colwise().minCoeff();
+		this->max_bounds = points.colwise().maxCoeff();
+		this->centroid = points.colwise().mean();
+		this->aligned = true;
 	}
 }
 
 void TINBasedRoughness::calculateNormals()
 {
-    using namespace arma;
-    normals.zeros(triangles.n_rows,3);
-    for (arma::uword triangle_i = 0; triangle_i < triangles.n_rows; ++triangle_i) {
-        rowvec V1V2 = points.row(triangles(triangle_i, 1)) - points.row(triangles(triangle_i, 0));
-        rowvec V1V3 = points.row(triangles(triangle_i, 2)) - points.row(triangles(triangle_i, 0));
-        normals.row(triangle_i) = normalise(cross(V1V2, V1V3).t()).t();
-    }
+    using namespace Eigen;
+	normals.resize(triangles.rows(),NoChange);
+	std::transform(
+		triangles.rowwise().cbegin(),triangles.rowwise().cend(),
+		this->normals.rowwise().begin(),
+		[&](const auto& row){
+			Vector3d V1V2 = points.row(row(1)) - points.row(row(0));
+			Vector3d V1V3 = points.row(row(2)) - points.row(row(0));
+			return V1V2.cross(V1V3).normalized();
+		}
+	);
 }
 
 void TINBasedRoughness::calculateAreas()
 {
-    using namespace arma;
-	std::vector<double> nominal_areas;
+    using namespace Eigen;
+	areas.resize(triangles.rows());
+	std::transform(
+		triangles.rowwise().cbegin(),triangles.rowwise().cend(),
+		areas.begin(),
+		[&](const auto& row) -> double {
+			Vector3d V1V2 = points.row(row(1)) - points.row(row(0));
+			Vector3d V1V3 = points.row(row(2)) - points.row(row(0));
+			return 0.5*V1V2.cross(V1V3).norm();
+		});
 
-    triangles.each_row([&](Row<uint64_t>& triangle) {
-        rowvec V1V2(3);
-        rowvec V1V3(3);
-        V1V2 = points.row(triangle(1)) - points.row(triangle(0));
-        V1V3 = points.row(triangle(2)) - points.row(triangle(0));
-        areas.push_back(0.5*norm(cross(V1V2, V1V3)));
-    });
-    total_area = std::accumulate(areas.begin(), areas.end(), 0.0);
+    this->total_area = std::accumulate(areas.begin(), areas.end(), 0.0);
 }
 
 std::vector<double> get_area_vector(
@@ -244,51 +211,50 @@ std::pair<double,double> area_params(
 void TINBasedRoughness::evaluate(TINBasedRoughness_settings settings, bool verbose_,std::string file_path)
 {
     settings_ = settings;
-    using namespace arma;
+    using namespace Eigen;
     this->alignBestFit();
     this->calculateNormals();
     this->calculateAreas();
 	typedef std::vector<TIN_triangle> TriangleContainer;
     if (verbose_) std::cout << "Calculated areas\n";
 	// 1.0 Calculate analysis directions;
-	azimuths_ = datum::pi / 180 * linspace(0, 360-360/settings_.at("n_az"), (arma::uword)settings_.at("n_az"));
-	auto size_az = size(azimuths_);
-	arma::uword n_directions = azimuths_.n_elem;
-	azimuths_ += settings_.at("az_offset") * datum::pi / 180;
-    delta_t_.zeros(n_directions);
-    delta_star_t_.zeros(n_directions);
-    n_facing_triangles_.zeros(n_directions);
+	azimuths_ = M_PI / 180. * ArrayXd::LinSpaced((Index)settings_.at("n_az"),0., 360.-360./settings_.at("n_az"));
+	size_t n_directions = azimuths_.size();
+	azimuths_ += settings_.at("az_offset") * M_PI / 180.;
+    delta_t_ = ArrayXd::Zero(n_directions);
+    delta_star_t_ = ArrayXd::Zero(n_directions);
+    n_facing_triangles_ = ArrayXd::Zero(n_directions);
 
     if (verbose_) std::cout << "Calculated analysis directions\n";
 	// 2.0 Create triangles for analysis
-	TriangleContainer dir_triangle(triangles.n_rows);
-	auto normal_x_iter = this->normals.begin_col(0);
-	auto normal_y_iter = this->normals.begin_col(1);
-	auto normal_z_iter = this->normals.begin_col(2);
-	auto area_iter = this->areas.begin();
+	TriangleContainer dir_triangle(triangles.rows());
 	unsigned int counter = 0;
 
-	std::for_each(dir_triangle.begin(), dir_triangle.end(), 
-	[&](TIN_triangle& triangle) {
-        triangle.index = counter++;
-        triangle.area = *area_iter++;	
-        triangle.set_normal(*normal_x_iter++, *normal_y_iter++, *normal_z_iter++);
-	});
+	std::transform(
+		this->normals.rowwise().begin(),this->normals.rowwise().end(),
+		this->areas.begin(),
+		dir_triangle.begin(),
+		[&](const auto& norm_row,const double& area) -> TIN_triangle {
+			TIN_triangle triangle;
+			triangle.index = counter++;
+			triangle.area = area;
+			triangle.set_normal(norm_row);
+			return triangle;
+		});
 
 	if (verbose_) std::cout << "Created triangle containers\n";
 
-    if (this->triangles.n_rows < settings_["min_triangles"]) {
-		typedef std::vector<double> stdvec;
-        this->parameters.insert({"az",conv_to<stdvec>::from(azimuths_)});
-        this->parameters.insert({"n_tri", conv_to<stdvec>::from(n_facing_triangles_)});
-        this->parameters.insert({"delta_t",conv_to<stdvec>::from(delta_t_)});
-        this->parameters.insert({"delta*_t", conv_to<stdvec>::from(delta_star_t_)});
+    if (this->triangles.rows() < settings_["min_triangles"]) {
+        this->parameters.insert({"az",azimuths_});
+        this->parameters.insert({"n_tri", n_facing_triangles_});
+        this->parameters.insert({"delta_t",delta_t_});
+        this->parameters.insert({"delta*_t",delta_star_t_});
 		return;
 	}
 
-	mat cartesian_az = pol2cart(azimuths_);
+	MatrixX2d cartesian_az = pol2cart(azimuths_);
 
-	for (size_t az_i = 0; az_i < azimuths_.n_elem; ++az_i) {
+	for (int az_i = 0; az_i < azimuths_.size(); ++az_i) {
 		if (verbose_) std::cout << "Calculated az" << std::to_string(az_i) << "\n";
         TriangleContainer evaluation;
 		std::copy(dir_triangle.begin(), dir_triangle.end(), std::back_inserter(evaluation));
@@ -304,7 +270,7 @@ void TINBasedRoughness::evaluate(TINBasedRoughness_settings settings, bool verbo
 			return triangle.apparent_dip_angle < 0;
 		});
 		evaluation.erase(remove_it, evaluation.end());
-        n_facing_triangles_(az_i) = (uword) evaluation.size();
+        n_facing_triangles_(az_i) = (double)evaluation.size();
         if (n_facing_triangles_(az_i) > 0) {
             auto n_facing_triangles = n_facing_triangles_(az_i);
 
@@ -320,16 +286,15 @@ void TINBasedRoughness::evaluate(TINBasedRoughness_settings settings, bool verbo
 			delta_star_t_(az_i) = delta_t_pair.second;
         }
     }
-    typedef std::vector<double> stdvec;
-    this->parameters.insert({"az",conv_to<stdvec>::from(azimuths_)});
-    this->parameters.insert({"n_tri", conv_to<stdvec>::from(n_facing_triangles_)});
-    this->parameters.insert({"delta_t",conv_to<stdvec>::from(delta_t_)});
-    this->parameters.insert({"delta*_t", conv_to<stdvec>::from(delta_star_t_)});
+    this->parameters.insert({"az",azimuths_});
+    this->parameters.insert({"n_tri", n_facing_triangles_});
+    this->parameters.insert({"delta_t",delta_t_});
+    this->parameters.insert({"delta*_t", delta_star_t_});
     if (!file_path.empty()) save_file(file_path);
     
-    points.clear();
-    triangles.clear();
-    normals.clear();
+    points.resize(0,0);
+    triangles.resize(0,0);
+    normals.resize(0,0);
     triangle_mask.clear();
     areas.clear();
 }
@@ -341,14 +306,14 @@ bool TINBasedRoughness::save_file(std::string path)
 	if (stlfile.is_open()) {
 		stlfile << "solid " + path + "\n";
 
-		for (arma::uword triangle = 0; triangle < triangles.n_rows; ++triangle) {
+		for (Eigen::Index triangle = 0; triangle < triangles.rows(); ++triangle) {
 			stlfile << "facet normal " +
 				to_string(normals(triangle, 0)) + " " +
 				to_string(normals(triangle, 1)) + " " +
 				to_string(normals(triangle, 2)) + "\n";
 
 			stlfile << "\touter loop\n";
-			for (arma::uword vertex = 0; vertex < 3; ++vertex) {
+			for (Eigen::Index vertex = 0; vertex < 3; ++vertex) {
 				stlfile << "\t\tvertex " +
 					to_string(points(triangles(triangle, vertex), 0)) + " " +
 					to_string(points(triangles(triangle, vertex), 1)) + " " +
@@ -375,14 +340,14 @@ std::vector<std::string> TINBasedRoughness::result_keys()
     return keys;
 }
 
-arma::mat TINBasedRoughness::pol2cart(arma::vec azimuth) 
+Eigen::MatrixX2d TINBasedRoughness::pol2cart(Eigen::ArrayXd azimuth) 
 {
-	using namespace arma;
+	using namespace Eigen;
 	// Polar to cartesian transformation by vector
-	vec Tx = cos(azimuth);
-	vec Ty = sin(azimuth);
+	ArrayXd Tx = azimuth.cos();
+	ArrayXd Ty = azimuth.sin();
 
-	mat T;
-	T = join_horiz(Tx, Ty);
+	MatrixX2d T(azimuth.size(),2);
+	T << Tx,Ty;
 	return T;
 }

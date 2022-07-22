@@ -9,13 +9,13 @@ from scipy.spatial import ConvexHull
 
 from .roughness_impl import (
     _rs,
-    _cppDirectionalRoughness,
-    _PyDirectionalRoughness,
-    _PyTINBasedRoughness,
+    # _cppDirectionalRoughness,
+    # _PyDirectionalRoughness,
+    # _PyTINBasedRoughness,
     _cppTINBasedRoughness,
-    _cppTINBasedRoughness_bestfit,
-    _cppTINBasedRoughness_againstshear,
-    _cppMeanDipRoughness
+    # _cppTINBasedRoughness_bestfit,
+    # _cppTINBasedRoughness_againstshear,
+    # _cppMeanDipRoughness
 )
 
 
