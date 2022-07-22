@@ -16,9 +16,9 @@ TINBasedRoughness_bestfit::TINBasedRoughness_bestfit(
 {
     using namespace arma;
     this->points = conv_to<mat>::from(points);
-    this->points = reshape(this->points,points.size()/3,3);
-    this->triangles = conv_to<Mat<uint64_t>>::from(triangles);
-    this->triangles = reshape(this->triangles, triangles.size()/3,3);
+    this->points.reshape(points.size()/3,3);
+    this->triangles = conv_to<u64_mat>::from(triangles);
+    this->triangles.reshape(triangles.size()/3,3);
     this->alignBestFit();
     this->calculateNormals();
 }
@@ -37,9 +37,9 @@ TINBasedRoughness_bestfit::TINBasedRoughness_bestfit(
 	for (auto tri_it = selected_triangles.begin(); tri_it != selected_triangles.end(); ++tri_it) {
 		arma::uword index = (arma::uword) std::distance(selected_triangles.begin(),tri_it);
 		this->triangles.row(index) = 
-			{triangles.at(*tri_it),
-			triangles.at(*tri_it + triangles_in_n_rows),
-			triangles.at(*tri_it + 2*triangles_in_n_rows)};
+			{triangles.at(size_t(*tri_it)),
+			triangles.at(size_t(*tri_it) + triangles_in_n_rows),
+			triangles.at(size_t(*tri_it) + 2*triangles_in_n_rows)};
 	}
 
 	// Get vector of all unique points

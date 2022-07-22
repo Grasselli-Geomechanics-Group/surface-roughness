@@ -26,7 +26,6 @@ root_folder = os.getcwd()
 
 if platform.system() == "Windows":
     armadillo_include = env_path('ARMADILLO_ROOT','include')
-    openblas_lib = env_path('ARMADILLO_ROOT','examples/lib_win64')
     roughness_cppimpl_sources = [
         "surface_roughness/_roughness_cppimpl.cpp",
         "surface_roughness/_roughness_cpp/DirectionalRoughness.cpp",
@@ -34,7 +33,6 @@ if platform.system() == "Windows":
         "surface_roughness/_roughness_cpp/TINBasedRoughness_bestfit.cpp",
         "surface_roughness/_roughness_cpp/TINBasedRoughness_againstshear.cpp",
         "surface_roughness/_roughness_cpp/MeanApparentDip.cpp"
-
     ]
     roughness_cppimpl_includes = [
             numpy.get_include(),
@@ -50,7 +48,7 @@ if platform.system() == "Windows":
         libraries=[
             'libopenblas'
         ],
-        library_dirs=[openblas_lib],
+        library_dirs=['prebuild/OpenBLAS-0.3.20-x86/lib'],
         language='c++',
         extra_compile_args=cpp_args,
         extra_link_args=['/DEBUG'] if debug else [] 
@@ -70,7 +68,7 @@ if platform.system() == "Windows":
         ext_package='surface_roughness',
         ext_modules=[roughness_cppimpl],
         package_data={
-            'surface_roughness':['libopenblas.dll']},
+            'surface_roughness':['prebuild/OpenBLAS-0.3.20-x86/libopenblas.dll']},
         install_requires=[
             'scipy',
             'meshio',
@@ -78,8 +76,8 @@ if platform.system() == "Windows":
             'numpy',
             'numexpr',
             'pandas',
-            'pptk',
             'matplotlib',
-            'pyevtk'
+            'pyevtk',
+            'pythran-openblas'
         ]
     )

@@ -106,7 +106,7 @@ public:
 
 private:
     arma::mat points;
-    arma::Mat<arma::uword> triangles;
+    arma::u64_mat triangles;
     arma::mat normals;
 	std::vector<uint8_t> triangle_mask;
 
