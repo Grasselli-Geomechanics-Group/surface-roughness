@@ -30,7 +30,7 @@ if platform.system() == "Windows":
         # "surface_roughness/_roughness_cpp/DirectionalRoughness.cpp",
         "surface_roughness/_roughness_cpp/TINBasedRoughness.cpp",
         # "surface_roughness/_roughness_cpp/TINBasedRoughness_bestfit.cpp",
-        # "surface_roughness/_roughness_cpp/TINBasedRoughness_againstshear.cpp",
+        "surface_roughness/_roughness_cpp/TINBasedRoughness_againstshear.cpp",
         # "surface_roughness/_roughness_cpp/MeanApparentDip.cpp"
 
     ]

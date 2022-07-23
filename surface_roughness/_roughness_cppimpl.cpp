@@ -4,7 +4,7 @@
 #include <pybind11/eigen.h>
 
 // #include "DirectionalRoughness.h"
-// #include "TINBasedRoughness_againstshear.h"
+#include "TINBasedRoughness_againstshear.h"
 // #include "TINBasedRoughness_bestfit.h"
 #include "TINBasedRoughness.h"
 // #include "MeanApparentDip.h"
@@ -140,57 +140,20 @@ PYBIND11_MODULE(_roughness_cppimpl,m) {
 //     .def_property_readonly("shape_size",&TINBasedRoughness_bestfit::get_size)
 //     .def_property_readonly("total_area",&TINBasedRoughness_bestfit::get_area);
 
-//     py::class_<TINBasedRoughness_againstshear>(m,"_cppTINBasedRoughness_againstshear_impl")
-//     .def(py::init([](
-//             const py::array_t<double, py::array::f_style | py::array::forcecast>& points,
-// 			const py::array_t<uint64_t, py::array::f_style | py::array::forcecast>& triangles
-//         ) {
-//             info p_info = points.request();
-// 		    info t_info = triangles.request();
-
-//             std::vector<double> arma_points(p_info.size);
-//             for (size_t i = 0; i < arma_points.size(); ++i)
-//                 arma_points.at(i) = *((double*)p_info.ptr + i);
- 
-//             std::vector<uint64_t> arma_triangles(t_info.size);
-//             for (size_t i = 0; i < arma_triangles.size(); ++i)
-// 			    arma_triangles.at(i) = *((uint64_t*)t_info.ptr + i);
-                
-//             return TINBasedRoughness_againstshear(arma_points,arma_triangles);
-//         }))
-//     .def(py::init([](
-//             const py::array_t<double, py::array::f_style | py::array::forcecast>& points,
-// 			const py::array_t<uint64_t, py::array::f_style | py::array::forcecast>& triangles,
-//             const py::array_t<uint64_t, py::array::f_style | py::array::forcecast>& selected_triangles
-//         ) {
-//             info p_info = points.request();
-// 		    info t_info = triangles.request();
-//             info m_info = selected_triangles.request();
-
-//             std::vector<double> arma_points(p_info.size);
-//             for (size_t i = 0; i < arma_points.size(); ++i)
-//                 arma_points.at(i) = *((double*)p_info.ptr + i);
-
-//             std::vector<uint64_t> arma_triangles(t_info.size);
-//             for (size_t i = 0; i < arma_triangles.size(); ++i)
-// 			    arma_triangles.at(i) = *((uint64_t*)t_info.ptr + i);
-                
-//             std::vector<uint64_t> arma_mask(m_info.size);
-//             for (size_t i = 0; i < arma_mask.size(); ++i)
-// 			    arma_mask.at(i) = *((uint64_t*)m_info.ptr + i);
-//             return TINBasedRoughness_againstshear(arma_points,arma_triangles,arma_mask);
-//         }))
-//     .def("evaluate",&TINBasedRoughness_againstshear::evaluate)
-//     .def("__getitem__",&TINBasedRoughness_againstshear::operator[])
-//     .def("points",&TINBasedRoughness_againstshear::get_points)
-//     .def("normals",&TINBasedRoughness_againstshear::get_normals)
-//     .def("result_keys",&TINBasedRoughness_againstshear::result_keys)
-//     .def_property_readonly("final_orientation",&TINBasedRoughness_againstshear::get_final_orientation)
-//     .def_property_readonly("min_bounds",&TINBasedRoughness_againstshear::get_min_bounds)
-//     .def_property_readonly("max_bounds",&TINBasedRoughness_againstshear::get_max_bounds)
-//     .def_property_readonly("centroid",&TINBasedRoughness_againstshear::get_centroid)
-//     .def_property_readonly("shape_size",&TINBasedRoughness_againstshear::get_size)
-//     .def_property_readonly("total_area",&TINBasedRoughness_againstshear::get_area);
+    py::class_<TINBasedRoughness_againstshear>(m,"_cppTINBasedRoughness_againstshear_impl")
+    .def(py::init<Eigen::MatrixX3d,Eigen::MatrixX3i>())
+    .def(py::init<Eigen::MatrixX3d,Eigen::MatrixX3i,Eigen::ArrayXi>())
+    .def("evaluate",&TINBasedRoughness_againstshear::evaluate)
+    .def("__getitem__",&TINBasedRoughness_againstshear::operator[])
+    .def("points",&TINBasedRoughness_againstshear::get_points)
+    .def("normals",&TINBasedRoughness_againstshear::get_normals)
+    .def("result_keys",&TINBasedRoughness_againstshear::result_keys)
+    .def_property_readonly("final_orientation",&TINBasedRoughness_againstshear::get_final_orientation)
+    .def_property_readonly("min_bounds",&TINBasedRoughness_againstshear::get_min_bounds)
+    .def_property_readonly("max_bounds",&TINBasedRoughness_againstshear::get_max_bounds)
+    .def_property_readonly("centroid",&TINBasedRoughness_againstshear::get_centroid)
+    .def_property_readonly("shape_size",&TINBasedRoughness_againstshear::get_size)
+    .def_property_readonly("total_area",&TINBasedRoughness_againstshear::get_area);
 
 //     py::class_<MeanDipRoughness>(m,"_cppMeanDipRoughness_impl")
 //     .def(py::init([](
