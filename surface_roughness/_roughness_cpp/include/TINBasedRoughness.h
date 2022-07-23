@@ -8,71 +8,6 @@
 
 #include <Eigen/Core>
 
-struct TIN_triangle
-{
-	unsigned int index;
-	double normal_x, normal_y, normal_z;//, horizontal_radius;
-	double normal_angle;
-	long double area;
-	double apparent_dip_angle;
-	TIN_triangle() {}
-	/*  Matrix form V(vertex, dimension)
-	*        x  y  z
-	*   V0  [       ]
-	*   V1  [       ]
-	*   V2  [       ]
-	*
-	*/
-
-	TIN_triangle(int index, Eigen::Vector3d normal, double area) :
-		index(index), area(area),apparent_dip_angle(0)
-	{
-		normal_x = normal(0);
-		normal_y = normal(1);
-		normal_z = normal(2);
-		// get r = sqrt(normal_x^2+normal_y^2)
-		//horizontal_radius = std::sqrt(normal_x*normal_x + normal_y*normal_y);
-		normal_angle = std::atan2(normal_y, normal_x);
-		if (normal_angle < 0) normal_angle += 2 * M_PI;
-		// normal slope w.r.t x-y plane = normal_z / sqrt(normal_x^2+normal_y^2)
-		// dip_slope is perpendicular to normal slope and needs to be positive
-		// therefore get the absolute of inverse  of normal_slope
-		//true_dip_slope = std::abs(horizontal_radius/(normal(2)));
-	}
-	inline void set_normal(Eigen::RowVector3d normal) {
-		this->normal_x = normal(0);
-		this->normal_y = normal(1);
-		this->normal_z = normal(2);
-		normal_angle = std::atan2(normal_y,normal_x);
-		if (normal_angle < 0) normal_angle += 2*M_PI;
-	}
-	inline void set_normal(double normal_x, double normal_y,double normal_z) {
-		this->normal_x = normal_x;
-		this->normal_y = normal_y;
-		this->normal_z = normal_z;
-		normal_angle = std::atan2(normal_y, normal_x);
-		if (normal_angle < 0) normal_angle += 2 * M_PI;
-	}
-	void set_apparent_dip(double shear_dir_x, double shear_dir_y)
-	{
-		// apparent dip slope calculation
-		// Get shear direction for shear plane
-		// Project triangle normal vector onto shear plane
-		// Pr = normal - proj(normal) on shear direction plane
-		// Apparent dip angle is preserved and is now the true dip angle of plane represented by the projected normal vector
-		double Prx = normal_x - (shear_dir_y*shear_dir_y*normal_x - shear_dir_y * shear_dir_x*normal_y);
-		double Pry = normal_y - (-shear_dir_x * shear_dir_y*normal_x + shear_dir_x * shear_dir_x*normal_y);
-		double Prz = normal_z;
-		// Renormalize projected normal vector
-		double div = std::sqrt(Prx*Prx + Pry * Pry + Prz * Prz);
-		Prx /= div;
-		Pry /= div;
-
-		// Get angle between projected normal vector and shear direction
-		apparent_dip_angle =  std::acos(shear_dir_x*(Prx)+shear_dir_y * (Pry)) - M_PI_2;
-	}
-};
-
 struct TINBasedRoughness_settings : public std::unordered_map<std::string,double>
 {
 	TINBasedRoughness_settings() {
@@ -89,7 +24,7 @@ class TINBasedRoughness
 {
 public:
 	TINBasedRoughness(Eigen::MatrixX3d points, Eigen::MatrixX3i triangles);
-	// TINBasedRoughness(const std::vector<double>& points, const std::vector<uint64_t>& triangles, const std::vector<uint64_t>& selected_triangles);
+	TINBasedRoughness(Eigen::MatrixX3d points, Eigen::MatrixX3i triangles, Eigen::ArrayXi selected_triangles);
 	void evaluate(TINBasedRoughness_settings settings = TINBasedRoughness_settings(),bool verbose=false, std::string file=std::string());
     Eigen::ArrayXd operator[](std::string key) {return parameters[key];}
     Eigen::MatrixX3d get_points() {return points;}
@@ -112,22 +47,15 @@ private:
 
     std::vector<double> areas;
     double total_area;
-
-	bool save_file(std::string file_path);
 	
 	TINBasedRoughness_settings settings_;
     std::unordered_map<std::string,Eigen::ArrayXd> parameters;
 
-	
-	Eigen::MatrixX2d pol2cart(Eigen::ArrayXd azimuths);
-    void alignBestFit();
-    void calculateNormals();
-    void calculateAreas();
-
-    Eigen::Vector3d plane_fit(const Eigen::MatrixX3d& xyz);
-    Eigen::Vector3d plane_normal(const Eigen::MatrixX3d& xyz);
 	Eigen::Vector3d initial_orientation;
 	Eigen::Vector3d final_orientation;
+
+	void alignBestFit();
+	bool save_file(std::string path);
 
 	Eigen::Vector3d min_bounds;
 	Eigen::Vector3d max_bounds;

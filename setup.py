@@ -25,7 +25,6 @@ def env_path(env_var,relative_path):
 root_folder = os.getcwd()
 
 if platform.system() == "Windows":
-    armadillo_include = env_path('ARMADILLO_ROOT','include')
     roughness_cppimpl_sources = [
         "surface_roughness/_roughness_cppimpl.cpp",
         # "surface_roughness/_roughness_cpp/DirectionalRoughness.cpp",
@@ -37,7 +36,6 @@ if platform.system() == "Windows":
     ]
     roughness_cppimpl_includes = [
             numpy.get_include(),
-            armadillo_include,
             'surface_roughness/_roughness_cpp/include',
             'eigen'
     ]

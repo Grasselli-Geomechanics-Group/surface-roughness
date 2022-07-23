@@ -75,19 +75,18 @@ PYBIND11_MODULE(_roughness_cppimpl,m) {
 
     py::class_<TINBasedRoughness>(m,"_cppTINBasedRoughness_impl")
     .def(py::init<Eigen::MatrixX3d,Eigen::MatrixX3i>())
-    // .def(py::init<Eigen::MatrixX3f,Eigen::MatrixX3i,Eigen::MatrixX3i())
+    .def(py::init<Eigen::MatrixX3d,Eigen::MatrixX3i,Eigen::ArrayXi>())
     .def("evaluate",&TINBasedRoughness::evaluate)
     .def("__getitem__",&TINBasedRoughness::operator[])
-    // .def("points",&TINBasedRoughness::get_points)
-    // .def("normals",&TINBasedRoughness::get_normals)
+    .def("points",&TINBasedRoughness::get_points)
+    .def("normals",&TINBasedRoughness::get_normals)
     .def("result_keys",&TINBasedRoughness::result_keys)
-    // .def_property_readonly("final_orientation",&TINBasedRoughness::get_final_orientation)
+    .def_property_readonly("final_orientation",&TINBasedRoughness::get_final_orientation)
     .def_property_readonly("min_bounds",&TINBasedRoughness::get_min_bounds)
     .def_property_readonly("max_bounds",&TINBasedRoughness::get_max_bounds)
     .def_property_readonly("centroid",&TINBasedRoughness::get_centroid)
-    // .def_property_readonly("shape_size",&TINBasedRoughness::get_size)
-    // .def_property_readonly("total_area",&TINBasedRoughness::get_area)
-    ;
+    .def_property_readonly("shape_size",&TINBasedRoughness::get_size)
+    .def_property_readonly("total_area",&TINBasedRoughness::get_area);
 
 //     py::class_<TINBasedRoughness_bestfit>(m,"_cppTINBasedRoughness_bestfit_impl")
 //     .def(py::init([](
