@@ -70,7 +70,6 @@ if platform.system() == "Windows":
             'numexpr',
             'pandas',
             'matplotlib',
-            'pyevtk',
-            'pythran-openblas'
+            'pyevtk'        
         ]
     )
