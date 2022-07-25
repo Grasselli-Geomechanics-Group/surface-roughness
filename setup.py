@@ -1,5 +1,5 @@
 from setuptools import setup
-from pybind11.setup_helpers import Pybind11Extension
+from pybind11.setup_helpers import Pybind11Extension, build_ext
 import os
 
 import platform
@@ -13,11 +13,10 @@ if platform.system() == "Windows":
               '/sdl',
               '/MD',
               '/Gy',
-              '/std:c++17',
               '/Zi' if debug else '' # Remove after debugging
             ]
 else:
-    cpp_args = ['-std=c++17']
+    cpp_args = []
  
 def env_path(env_var,relative_path):
     return os.path.join(os.environ[env_var],relative_path)
@@ -53,12 +52,13 @@ if platform.system() == "Windows":
         description="Surface roughness calculation with Python",
         author="Earl Magsipoc",
         author_email="e.magsipoc@mail.utoronto.ca",
+        url="https://github.com/e-mags/pysurfaceroughness",
         license="MIT",
         package_dir = {
             'surface_roughness':'surface_roughness',
             'surface_roughness._roughness_pyimpl':'surface_roughness/_roughness_pyimpl'},
         packages=['surface_roughness','surface_roughness._roughness_pyimpl'],
-        ext_package='surface_roughness',
+        # ext_package='surface_roughness',
         ext_modules=[roughness_cppimpl],
         install_requires=[
             'scipy',
@@ -69,5 +69,8 @@ if platform.system() == "Windows":
             'pandas',
             'matplotlib',
             'pyevtk'        
-        ]
+        ],
+        cmdclass={"build_ext":build_ext},
+        zip_safe=False,
+        python_requires=">=3.7"
     )
