@@ -1,7 +1,6 @@
 from setuptools import setup
 from pybind11.setup_helpers import Pybind11Extension
 import os
-import numpy
 
 import platform
 
@@ -34,7 +33,6 @@ if platform.system() == "Windows":
         "surface_roughness/_roughness_cpp/MeanApparentDip.cpp"
     ]
     roughness_cppimpl_includes = [
-            numpy.get_include(),
             'surface_roughness/_roughness_cpp/include',
             'eigen'
     ]
