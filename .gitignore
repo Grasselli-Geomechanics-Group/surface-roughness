@@ -11,3 +11,4 @@ test_sampling
 *.stl
 *.png
 *.svg
+prebuild/OpenBLAS-0.3.20-x86/

@@ -39,10 +39,11 @@ requires = [
   "pybind11>=2.8.0",
   "cmake>=3.21",
   "scikit-build>=0.12",
-  "numpy"
+  "numpy",
+  "pythran-openblas"
 ]
 
 build-backend = "setuptools.build_meta"
 
-[tool.isort]
-profile = "black"
+[tool.cibuildwheel]
+before-build = "powershell ./prebuild/prebuild_windows.ps1"
