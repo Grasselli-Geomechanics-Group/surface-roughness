@@ -32,43 +32,7 @@ TINBasedRoughness_againstshear::TINBasedRoughness_againstshear(
     Eigen::ArrayXi selected_triangles):
 	aligned(false)
 {
-	using namespace Eigen;
-	
-	size_t n_triangles = selected_triangles.size();
-	size_t triangles_in_n_rows = triangles.rows();
-	this->triangles.resize(n_triangles,3);
-	for (auto& tri_it : selected_triangles) {
-		auto index = &tri_it - &selected_triangles[0];
-		this->triangles.row(index) = triangles.row(tri_it);
-	}
-
-	// Get vector of all unique points
-	MatrixX3i temp_tri = this->triangles;
-	std::set<int> point_indices{temp_tri.data(),temp_tri.data()+temp_tri.size()};
-	std::vector<std::pair<int,int>> p_init;
-	std::vector<int> new_vals(point_indices.size()); 
-	std::iota(new_vals.begin(),new_vals.end(), 0);
-	std::transform(
-		point_indices.begin(),point_indices.end(),
-		new_vals.begin(),std::back_inserter(p_init),
-		[](const auto& a, const auto& b) 
-		{ return std::make_pair(a,b); });
-
-	std::unordered_map<int,int> pindex_find(p_init.begin(),p_init.end());
-	
-	// Copy points
-	Index n_points = points.rows();
-	this->points.resize(point_indices.size(), 3);
-	for (auto point_index = point_indices.begin(); point_index != point_indices.end(); ++point_index){
-		this->points.row(std::distance(point_indices.begin(),point_index)) = points.row(*point_index);
-	}
-	// Reconfigure triangles to current point index
-	this->triangles = this->triangles.unaryExpr(
-		[&](int val) {
-			return pindex_find.at(val);
-		}
-	);
-
+	select_triangles(this->points,points,this->triangles,triangles,selected_triangles);
     this->alignBestFit();
     calculateNormals(this->points,this->triangles,this->normals);
 }

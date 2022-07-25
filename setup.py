@@ -27,12 +27,11 @@ root_folder = os.getcwd()
 if platform.system() == "Windows":
     roughness_cppimpl_sources = [
         "surface_roughness/_roughness_cppimpl.cpp",
-        # "surface_roughness/_roughness_cpp/DirectionalRoughness.cpp",
+        "surface_roughness/_roughness_cpp/DirectionalRoughness.cpp",
         "surface_roughness/_roughness_cpp/TINBasedRoughness.cpp",
-        # "surface_roughness/_roughness_cpp/TINBasedRoughness_bestfit.cpp",
+        "surface_roughness/_roughness_cpp/TINBasedRoughness_bestfit.cpp",
         "surface_roughness/_roughness_cpp/TINBasedRoughness_againstshear.cpp",
-        # "surface_roughness/_roughness_cpp/MeanApparentDip.cpp"
-
+        "surface_roughness/_roughness_cpp/MeanApparentDip.cpp"
     ]
     roughness_cppimpl_includes = [
             numpy.get_include(),

@@ -1,13 +1,13 @@
 import numpy as np
 from ._roughness_cppimpl import (
-    # _cppDirectionalRoughness_impl,
-    # _cppDirectionalRoughness_Settings_impl,
+    _cppDirectionalRoughness_impl,
+    _cppDirectionalRoughness_Settings_impl,
     _cppTINBasedRoughness_impl,
-    # _cppTINBasedRoughness_bestfit_impl,
-    # _cppTINBasedRoughness_againstshear_impl,
+    _cppTINBasedRoughness_bestfit_impl,
+    _cppTINBasedRoughness_againstshear_impl,
     _cppTINBasedRoughness_Settings_impl,
-    # _cppMeanDipRoughness_impl,
-    # _cppMeanDipRoughness_Settings_impl
+    _cppMeanDipRoughness_impl,
+    _cppMeanDipRoughness_Settings_impl
 )
 from ._roughness_pyimpl import (
     _PyTINBasedRoughness,
