@@ -19,6 +19,7 @@ jobs:
         uses: pypa/cibuildwheel@v2.8.1
         env:
           CIBW_ARCHS: "auto64"
+          CIBW_SKIP: "*-musllinux*"
         #    ...
         # with:
         #   package-dir: .
