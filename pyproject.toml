@@ -1,48 +1,8 @@
-[project]
-name = "Surface Roughness"
-version = "0.0.1"
-description = "Surface roughness calculator for Python"
-readme = "README.md"
-requires-python = ">=3.7"
-license = {file = "LICENSE.txt"}
-keywords = ["mesh", "scientific", "engineering","roughness"]
-authors = [
-  {email = "e.magsipoc@mail.utoronto.ca"},
-  {name = "Earl Magsipoc"}
-]
-classifiers = [
-  "Programming Language :: Python",
-  "Intended Audience :: Science/Research",
-  "Operating System :: OS Independent",
-  "Programming Language :: Python",
-  "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.7",
-  "Programming Language :: Python :: 3.8",
-  "Programming Language :: Python :: 3.9",
-  "Topic :: Scientific/Engineering",
-  "Topic :: Utilities"
-]
-dependencies = [
-  "importlib_metadata; python_version<'3.8'",
-  "numpy>=1.20.0"
-]
-
-
-
-[project.entry-points.console_scripts]
-meshio = "meshio._cli:main"
-
 [build-system]
 requires = [
   "setuptools>=42", 
   "wheel",
-  "pybind11>=2.8.0",
-  "cmake>=3.21",
-  "scikit-build>=0.12",
-  "numpy"
+  "pybind11>=2.8.0"
 ]
 
 build-backend = "setuptools.build_meta"
-
-[tool.isort]
-profile = "black"

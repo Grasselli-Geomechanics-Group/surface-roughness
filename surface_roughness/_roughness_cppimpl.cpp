@@ -1,6 +1,7 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
 #include <pybind11/stl.h>
+#include <pybind11/eigen.h>
 
 #include "DirectionalRoughness.h"
 #include "TINBasedRoughness_againstshear.h"
@@ -13,47 +14,8 @@ namespace py = pybind11;
 PYBIND11_MODULE(_roughness_cppimpl,m) {
     typedef py::buffer_info info;
     py::class_<DirectionalRoughness>(m,"_cppDirectionalRoughness_impl")
-        .def(py::init([](
-            const py::array_t<double, py::array::f_style | py::array::forcecast>& points,
-			const py::array_t<uint64_t, py::array::f_style | py::array::forcecast>& triangles
-        )
-        {
-            info p_info = points.request();
-		    info t_info = triangles.request();
-
-            std::vector<double> arma_points(p_info.size);
-            for (size_t i = 0; i < arma_points.size(); ++i)
-                arma_points.at(i) = *((double*)p_info.ptr + i);
-
-            std::vector<uint64_t> arma_triangles(t_info.size);
-            for (size_t i = 0; i < arma_triangles.size(); ++i)
-			    arma_triangles.at(i) = *((uint64_t*)t_info.ptr + i);
-
-            return DirectionalRoughness(arma_points,arma_triangles);
-        }))
-        .def(py::init([](
-            const py::array_t<double, py::array::f_style | py::array::forcecast>& points,
-			const py::array_t<uint64_t, py::array::f_style | py::array::forcecast>& triangles,
-            const py::array_t<uint64_t, py::array::f_style | py::array::forcecast>& triangle_mask
-        ) {
-            info p_info = points.request();
-		    info t_info = triangles.request();
-            info m_info = triangle_mask.request();
-
-            std::vector<double> arma_points(p_info.size);
-            for (size_t i = 0; i < arma_points.size(); ++i)
-                arma_points.at(i) = *((double*)p_info.ptr + i);
-
-            std::vector<uint64_t> arma_triangles(t_info.size);
-            for (size_t i = 0; i < arma_triangles.size(); ++i)
-			    arma_triangles.at(i) = *((uint64_t*)t_info.ptr + i);
-                
-            std::vector<uint64_t> arma_mask(m_info.size);
-            for (size_t i = 0; i < arma_mask.size(); ++i)
-			    arma_mask.at(i) = *((uint64_t*)m_info.ptr + i);
-
-            return DirectionalRoughness(arma_points,arma_triangles, arma_mask);
-        }))
+        .def(py::init<Eigen::MatrixX3d,Eigen::MatrixX3i>())
+        .def(py::init<Eigen::MatrixX3d,Eigen::MatrixX3i,Eigen::ArrayXi>())
         .def("evaluate",&DirectionalRoughness::evaluate)
         .def("__getitem__",&DirectionalRoughness::operator[])
         .def("points",&DirectionalRoughness::get_points)
@@ -73,45 +35,8 @@ PYBIND11_MODULE(_roughness_cppimpl,m) {
     .def("__getitem__",&DirectionalRoughness_settings::get);
 
     py::class_<TINBasedRoughness>(m,"_cppTINBasedRoughness_impl")
-    .def(py::init([](
-            const py::array_t<double, py::array::f_style | py::array::forcecast>& points,
-			const py::array_t<uint64_t, py::array::f_style | py::array::forcecast>& triangles
-        ) {
-            info p_info = points.request();
-		    info t_info = triangles.request();
-
-            std::vector<double> arma_points(p_info.size);
-            for (size_t i = 0; i < arma_points.size(); ++i)
-                arma_points.at(i) = *((double*)p_info.ptr + i);
- 
-            std::vector<uint64_t> arma_triangles(t_info.size);
-            for (size_t i = 0; i < arma_triangles.size(); ++i)
-			    arma_triangles.at(i) = *((uint64_t*)t_info.ptr + i);
-                
-            return TINBasedRoughness(arma_points,arma_triangles);
-        }))
-    .def(py::init([](
-            const py::array_t<double, py::array::f_style | py::array::forcecast>& points,
-			const py::array_t<uint64_t, py::array::f_style | py::array::forcecast>& triangles,
-            const py::array_t<uint64_t, py::array::f_style | py::array::forcecast>& selected_triangles
-        ) {
-            info p_info = points.request();
-		    info t_info = triangles.request();
-            info m_info = selected_triangles.request();
-
-            std::vector<double> arma_points(p_info.size);
-            for (size_t i = 0; i < arma_points.size(); ++i)
-                arma_points.at(i) = *((double*)p_info.ptr + i);
-
-            std::vector<uint64_t> arma_triangles(t_info.size);
-            for (size_t i = 0; i < arma_triangles.size(); ++i)
-			    arma_triangles.at(i) = *((uint64_t*)t_info.ptr + i);
-                
-            std::vector<uint64_t> arma_mask(m_info.size);
-            for (size_t i = 0; i < arma_mask.size(); ++i)
-			    arma_mask.at(i) = *((uint64_t*)m_info.ptr + i);
-            return TINBasedRoughness(arma_points,arma_triangles,arma_mask);
-        }))
+    .def(py::init<Eigen::MatrixX3d,Eigen::MatrixX3i>())
+    .def(py::init<Eigen::MatrixX3d,Eigen::MatrixX3i,Eigen::ArrayXi>())
     .def("evaluate",&TINBasedRoughness::evaluate)
     .def("__getitem__",&TINBasedRoughness::operator[])
     .def("points",&TINBasedRoughness::get_points)
@@ -125,45 +50,8 @@ PYBIND11_MODULE(_roughness_cppimpl,m) {
     .def_property_readonly("total_area",&TINBasedRoughness::get_area);
 
     py::class_<TINBasedRoughness_bestfit>(m,"_cppTINBasedRoughness_bestfit_impl")
-    .def(py::init([](
-            const py::array_t<double, py::array::f_style | py::array::forcecast>& points,
-			const py::array_t<uint64_t, py::array::f_style | py::array::forcecast>& triangles
-        ) {
-            info p_info = points.request();
-		    info t_info = triangles.request();
-
-            std::vector<double> arma_points(p_info.size);
-            for (size_t i = 0; i < arma_points.size(); ++i)
-                arma_points.at(i) = *((double*)p_info.ptr + i);
- 
-            std::vector<uint64_t> arma_triangles(t_info.size);
-            for (size_t i = 0; i < arma_triangles.size(); ++i)
-			    arma_triangles.at(i) = *((uint64_t*)t_info.ptr + i);
-                
-            return TINBasedRoughness_bestfit(arma_points,arma_triangles);
-        }))
-    .def(py::init([](
-            const py::array_t<double, py::array::f_style | py::array::forcecast>& points,
-			const py::array_t<uint64_t, py::array::f_style | py::array::forcecast>& triangles,
-            const py::array_t<uint64_t, py::array::f_style | py::array::forcecast>& selected_triangles
-        ) {
-            info p_info = points.request();
-		    info t_info = triangles.request();
-            info m_info = selected_triangles.request();
-
-            std::vector<double> arma_points(p_info.size);
-            for (size_t i = 0; i < arma_points.size(); ++i)
-                arma_points.at(i) = *((double*)p_info.ptr + i);
-
-            std::vector<uint64_t> arma_triangles(t_info.size);
-            for (size_t i = 0; i < arma_triangles.size(); ++i)
-			    arma_triangles.at(i) = *((uint64_t*)t_info.ptr + i);
-                
-            std::vector<uint64_t> arma_mask(m_info.size);
-            for (size_t i = 0; i < arma_mask.size(); ++i)
-			    arma_mask.at(i) = *((uint64_t*)m_info.ptr + i);
-            return TINBasedRoughness_bestfit(arma_points,arma_triangles,arma_mask);
-        }))
+    .def(py::init<Eigen::MatrixX3d,Eigen::MatrixX3i>())
+    .def(py::init<Eigen::MatrixX3d,Eigen::MatrixX3i,Eigen::ArrayXi>())
     .def("evaluate",&TINBasedRoughness_bestfit::evaluate)
     .def("__getitem__",&TINBasedRoughness_bestfit::operator[])
     .def("points",&TINBasedRoughness_bestfit::get_points)
@@ -177,45 +65,8 @@ PYBIND11_MODULE(_roughness_cppimpl,m) {
     .def_property_readonly("total_area",&TINBasedRoughness_bestfit::get_area);
 
     py::class_<TINBasedRoughness_againstshear>(m,"_cppTINBasedRoughness_againstshear_impl")
-    .def(py::init([](
-            const py::array_t<double, py::array::f_style | py::array::forcecast>& points,
-			const py::array_t<uint64_t, py::array::f_style | py::array::forcecast>& triangles
-        ) {
-            info p_info = points.request();
-		    info t_info = triangles.request();
-
-            std::vector<double> arma_points(p_info.size);
-            for (size_t i = 0; i < arma_points.size(); ++i)
-                arma_points.at(i) = *((double*)p_info.ptr + i);
- 
-            std::vector<uint64_t> arma_triangles(t_info.size);
-            for (size_t i = 0; i < arma_triangles.size(); ++i)
-			    arma_triangles.at(i) = *((uint64_t*)t_info.ptr + i);
-                
-            return TINBasedRoughness_againstshear(arma_points,arma_triangles);
-        }))
-    .def(py::init([](
-            const py::array_t<double, py::array::f_style | py::array::forcecast>& points,
-			const py::array_t<uint64_t, py::array::f_style | py::array::forcecast>& triangles,
-            const py::array_t<uint64_t, py::array::f_style | py::array::forcecast>& selected_triangles
-        ) {
-            info p_info = points.request();
-		    info t_info = triangles.request();
-            info m_info = selected_triangles.request();
-
-            std::vector<double> arma_points(p_info.size);
-            for (size_t i = 0; i < arma_points.size(); ++i)
-                arma_points.at(i) = *((double*)p_info.ptr + i);
-
-            std::vector<uint64_t> arma_triangles(t_info.size);
-            for (size_t i = 0; i < arma_triangles.size(); ++i)
-			    arma_triangles.at(i) = *((uint64_t*)t_info.ptr + i);
-                
-            std::vector<uint64_t> arma_mask(m_info.size);
-            for (size_t i = 0; i < arma_mask.size(); ++i)
-			    arma_mask.at(i) = *((uint64_t*)m_info.ptr + i);
-            return TINBasedRoughness_againstshear(arma_points,arma_triangles,arma_mask);
-        }))
+    .def(py::init<Eigen::MatrixX3d,Eigen::MatrixX3i>())
+    .def(py::init<Eigen::MatrixX3d,Eigen::MatrixX3i,Eigen::ArrayXi>())
     .def("evaluate",&TINBasedRoughness_againstshear::evaluate)
     .def("__getitem__",&TINBasedRoughness_againstshear::operator[])
     .def("points",&TINBasedRoughness_againstshear::get_points)
@@ -229,45 +80,8 @@ PYBIND11_MODULE(_roughness_cppimpl,m) {
     .def_property_readonly("total_area",&TINBasedRoughness_againstshear::get_area);
 
     py::class_<MeanDipRoughness>(m,"_cppMeanDipRoughness_impl")
-    .def(py::init([](
-            const py::array_t<double, py::array::f_style | py::array::forcecast>& points,
-			const py::array_t<uint64_t, py::array::f_style | py::array::forcecast>& triangles
-        ) {
-            info p_info = points.request();
-		    info t_info = triangles.request();
-
-            std::vector<double> arma_points(p_info.size);
-            for (size_t i = 0; i < arma_points.size(); ++i)
-                arma_points.at(i) = *((double*)p_info.ptr + i);
- 
-            std::vector<uint64_t> arma_triangles(t_info.size);
-            for (size_t i = 0; i < arma_triangles.size(); ++i)
-			    arma_triangles.at(i) = *((uint64_t*)t_info.ptr + i);
-                
-            return MeanDipRoughness(arma_points,arma_triangles);
-        }))
-    .def(py::init([](
-            const py::array_t<double, py::array::f_style | py::array::forcecast>& points,
-			const py::array_t<uint64_t, py::array::f_style | py::array::forcecast>& triangles,
-            const py::array_t<uint64_t, py::array::f_style | py::array::forcecast>& selected_triangles
-        ) {
-            info p_info = points.request();
-		    info t_info = triangles.request();
-            info m_info = selected_triangles.request();
-
-            std::vector<double> arma_points(p_info.size);
-            for (size_t i = 0; i < arma_points.size(); ++i)
-                arma_points.at(i) = *((double*)p_info.ptr + i);
-
-            std::vector<uint64_t> arma_triangles(t_info.size);
-            for (size_t i = 0; i < arma_triangles.size(); ++i)
-			    arma_triangles.at(i) = *((uint64_t*)t_info.ptr + i);
-                
-            std::vector<uint64_t> arma_mask(m_info.size);
-            for (size_t i = 0; i < arma_mask.size(); ++i)
-			    arma_mask.at(i) = *((uint64_t*)m_info.ptr + i);
-            return MeanDipRoughness(arma_points,arma_triangles,arma_mask);
-        }))
+    .def(py::init<Eigen::MatrixX3d,Eigen::MatrixX3i>())
+    .def(py::init<Eigen::MatrixX3d,Eigen::MatrixX3i,Eigen::ArrayXi>())
     .def("evaluate",&MeanDipRoughness::evaluate)
     .def("__getitem__",&MeanDipRoughness::operator[])
     .def("points",&MeanDipRoughness::get_points)

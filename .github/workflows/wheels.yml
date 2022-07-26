@@ -1,6 +1,6 @@
 name: Build
 
-on: [push, pull_request]
+on: [pull_request]
 
 jobs:
   build_wheels:
@@ -12,11 +12,13 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
+        with:
+          submodules: recursive
 
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.8.1
-        # env:
-        #   CIBW_SOME_OPTION: value
+        env:
+          CIBW_ARCHS: "auto64"
         #    ...
         # with:
         #   package-dir: .
