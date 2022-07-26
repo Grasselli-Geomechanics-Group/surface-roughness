@@ -96,7 +96,6 @@ static void select_triangles(
     using namespace Eigen;
 	
 	size_t n_triangles = selected_triangles.size();
-	size_t triangles_in_n_rows = triangles.rows();
 	this_triangles.resize(n_triangles,3);
 	for (auto& tri_it : selected_triangles) {
 		auto index = &tri_it - &selected_triangles[0];
@@ -118,7 +117,6 @@ static void select_triangles(
 	std::unordered_map<int,int> pindex_find(p_init.begin(),p_init.end());
 	
 	// Copy points
-	Index n_points = points.rows();
 	this_points.resize(point_indices.size(), 3);
 	for (auto point_index = point_indices.begin(); point_index != point_indices.end(); ++point_index){
 		this_points.row(std::distance(point_indices.begin(),point_index)) = points.row(*point_index);
@@ -169,7 +167,6 @@ struct BestFitResult {
 
 static BestFitResult align(Eigen::MatrixX3d& points, Eigen::MatrixX3i& triangles) {
     using namespace Eigen;
-    Vector3d centroid = points.colwise().mean();
 
     Vector3d initial_orientation = plane_normal(points);
     Vector3d current_orientation = initial_orientation;

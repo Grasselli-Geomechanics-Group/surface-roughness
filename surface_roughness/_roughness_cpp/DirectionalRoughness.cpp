@@ -56,7 +56,7 @@ void DirectionalRoughness::evaluate(DirectionalRoughness_settings settings, bool
 	// 1.0 Calculate analysis directions;
 	azimuths_.resize((Index)settings_.at("n_az"),1);
 	double step = 0;
-	for (auto& az:azimuths_.rowwise()) {
+	for (auto az:azimuths_.rowwise()) {
 		az = Matrix<double,1,1>(step);
 		step += 2*M_PI/settings_.at("n_az") + settings.at("az_offset")*M_PI/180;
 	}
@@ -101,7 +101,7 @@ void DirectionalRoughness::evaluate(DirectionalRoughness_settings settings, bool
 	MatrixX2d cartesian_az = pol2cart(azimuths_);
 	bins_.resize((Index)settings.at("n_dip_bins") + 1,1);
 	step = 0;
-	for (auto& bin:bins_.rowwise()) {
+	for (auto bin:bins_.rowwise()) {
 		bin = Matrix<double,1,1>(step);
 		step += M_PI_2/settings.at("n_dip_bins");
 	}
@@ -308,7 +308,6 @@ inline double dfdc(Eigen::ArrayXd& x, Eigen::ArrayXd& y, double c)
 double backtrack_search(Eigen::ArrayXd& x, Eigen::ArrayXd& y,double c, double dc, double reduction, double alpha, double beta)
 {
 	using namespace Eigen;
-	double v = estimate_dc(c,x,y); // v is non-reduced dc
 	double f_left = f(x,y,c+reduction*dc);
 	double f_right = f(x,y,c) + alpha * reduction * dfdc(x,y,c)*dc;
 
@@ -320,7 +319,7 @@ double DirectionalRoughness::C_param_Newton_opt_backtracking_Fit(Eigen::Index az
 	// https://web.stanford.edu/~boyd/cvxbook/bv_cvxbook.pdf
 	using namespace Eigen;
 	ArrayXd deg_bins = bins_.col(0) * 180 / M_PI;
-	size_t n_valid_values;
+	size_t n_valid_values = 0;
 	for (double& deg : deg_bins) {
 		if (deg > theta_max_(az_i)) {
 			n_valid_values = &deg - &deg_bins[0];
