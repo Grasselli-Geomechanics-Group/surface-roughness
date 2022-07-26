@@ -5,6 +5,7 @@
 #include <execution>
 #include <iterator>
 #include <functional>
+#include <vector>
 
 #include <Eigen/Core>
 

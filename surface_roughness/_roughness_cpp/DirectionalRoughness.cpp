@@ -226,7 +226,7 @@ std::vector<std::string> DirectionalRoughness::result_keys()
     return keys;
 }
 
-double gamma(double Z)
+double gamma_dr(double Z)
 {
 	// Approximation
 	using namespace std;
@@ -265,7 +265,7 @@ double chisqr(int DOF, double var)
 	double X = var * 0.5;
 	double p_value = chiPValue(K, X);
 	if (isnan(p_value) || isinf(p_value)) return 0.0;
-	p_value /= gamma(K);
+	p_value /= gamma_dr(K);
 	return 1 - p_value;
 }
 

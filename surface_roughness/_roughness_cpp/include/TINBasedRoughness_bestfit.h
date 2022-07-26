@@ -5,6 +5,7 @@
 #include <math.h>
 #include <unordered_map>
 #include <tuple>
+#include <vector>
 
 #include <Eigen/Core>
 
