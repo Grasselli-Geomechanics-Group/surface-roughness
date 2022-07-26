@@ -4,6 +4,7 @@
 #include <numeric>
 #include <algorithm>
 #include <iterator>
+#include <vector>
 
 #include <Eigen/Core>
 

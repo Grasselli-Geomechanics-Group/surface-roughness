@@ -11,6 +11,7 @@
 #include <bitset>
 #include <functional>
 #include <set>
+#include <vector>
 
 #include <Eigen/Core>
 #include <Eigen/Geometry>
