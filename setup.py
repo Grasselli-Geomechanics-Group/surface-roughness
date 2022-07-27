@@ -1,5 +1,6 @@
 from setuptools import setup
 from pybind11.setup_helpers import Pybind11Extension, build_ext
+from pathlib import Path
 
 import platform
 
@@ -43,7 +44,7 @@ setup(
     name="surface-roughness",
     version="0.0.1",
     description="Surface roughness calculation with Python",
-    long_description="",
+    long_description=(Path(__file__).parent/"README.md").read_text(),
     author="Earl Magsipoc",
     author_email="e.magsipoc@mail.utoronto.ca",
     url="https://github.com/e-mags/pysurfaceroughness",
