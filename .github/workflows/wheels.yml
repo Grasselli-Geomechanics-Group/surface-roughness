@@ -13,7 +13,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-20.04, windows-2019]
+        os: [ubuntu-20.04, windows-2019, macos-11]
 
     steps:
       - uses: actions/checkout@v3
@@ -24,7 +24,7 @@ jobs:
         uses: pypa/cibuildwheel@v2.8.1
         env:
           CIBW_ARCHS: "auto64"
-          CIBW_SKIP: "*-musllinux*"
+          CIBW_SKIP: "*-musllinux* pp37-macosx_x86_64 pp38-macosx_x86_64 pp39-macosx_x86_64"
         #    ...
         # with:
         #   package-dir: .
