@@ -9,6 +9,7 @@
 #include <iostream>
 #include <fstream>
 #include <set>
+#include <vector>
 
 #include <Eigen/Core>
 
