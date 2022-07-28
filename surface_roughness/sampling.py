@@ -361,6 +361,9 @@ class RoughnessMap:
         ax.axis('equal')
     
     def to_csv(self,*args,**kwargs):
+        """Creates a CSV of map data
+        *args, **kwargs for pandas dataframe outputs including filename and to_csv options
+        """
         def _build_df_row(calc:DirRoughnessBase):
             # flatten dataframe to row
             sample_df:DataFrame = calc.to_pandas()
@@ -400,6 +403,13 @@ class RoughnessMap:
         dfs.to_csv(*args,**kwargs)
     
     def to_vtk(self,file_prefix:str,metric:str):
+        """Create VTK files containing the roughness magnitudes and directions
+
+        :param file_prefix: Initial part of file name that will be appended based on VTK output type
+        :type file_prefix: str
+        :param metric: Metric name to be output to VTK
+        :type metric: str
+        """
         # interpolate data by triangle centroid
         centroids = np.mean(self.surface.points[self.surface.triangles,:2],axis=1)
         roughness_data_vtk = {}
