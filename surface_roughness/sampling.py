@@ -31,7 +31,20 @@ from .roughness import Surface
 
 
 class SampleWindow:
+    """A class describing a sampling window to calculate local roughness of a 3D surface
+    """
     def __init__(self,is_circle=True,radius=None,width=None,height=None):
+        """Creates a SampleWindow based on provided arguments
+
+        :param is_circle: Sets window as circle, defaults to True
+        :type is_circle: bool, optional
+        :param radius: Sets window radius if is_circle is True, defaults to None
+        :type radius: float, optional
+        :param width: Sets window width if is_circle is False, defaults to None
+        :type width: float, optional
+        :param height: Sets window height if is_circle is False, defaults to None
+        :type height: float, optional
+        """
         if radius is None and (width is None or height is None):
             raise ValueError("Either size arguments or width + height arguments must be defined")
         if is_circle and ((width is not None or height is not None) or radius is None):
@@ -51,6 +64,25 @@ def roughness_map(surface:Surface,
     sample_vertex_inclusion:int,
     seed_left_offset=0,
     seed_bot_offset=0,**roughness_kwargs):
+    """Generates a RoughnessMap instance to handle sampling and roughness analysis
+
+    :param surface: Surface data object to be processed
+    :type surface: Surface
+    :param roughness_method: Method to analyze by roughness map
+    :type roughness_method: str
+    :param sample_window: Sample window description to analyze local roughness
+    :type sample_window: SampleWindow
+    :param sample_spacing: Spacing between sample windows
+    :type sample_spacing: float
+    :param sample_vertex_inclusion: Minimum number of vertices to consider triangle in SampleWindow
+    :type sample_vertex_inclusion: int
+    :param seed_left_offset: Offset sample grid to the left, defaults to 0
+    :type seed_left_offset: int, optional
+    :param seed_bot_offset: Offset sample grid to the top, defaults to 0
+    :type seed_bot_offset: int, optional
+    :return: Returns a RoughnessMap object to handle sampling
+    :rtype: RoughnessMap
+    """
     if sample_vertex_inclusion > 3 or sample_vertex_inclusion < 0:
         raise ValueError("Argument sample_vertex_inclusion must be in range between 0-3")
     
