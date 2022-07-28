@@ -16,7 +16,9 @@ def generate_map(surface,method,submethods,w:SampleWindow):
         map.plot_distribution(submethod,'max_bidirectional',50,ax=plt.subplot(212))
         plt.tight_layout()
         plt.show()
+    return map
         
 surface = Surface(path=file_path)
-generate_map(surface,'delta_t',['delta_t'],w)
+map = generate_map(surface,'delta_t',['delta_t'],w)
+map.to_vtk("test","delta_t")
 pass

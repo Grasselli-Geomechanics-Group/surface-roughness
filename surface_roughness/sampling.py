@@ -404,13 +404,13 @@ class RoughnessMap:
         centroids = np.mean(self.surface.points[self.surface.triangles,:2],axis=1)
         roughness_data_vtk = {}
         for key,val in self.magopts.items():
-            roughness_data_vtk[key] = griddata(self.samples,val[metric],centroids)
+            roughness_data_vtk[key] = griddata(self.samples,val[metric],centroids).astype(np.float32)
         
         for az, col in zip(self.az,range(self.roughness_data[metric].shape[1])):
-            roughness_data_vtk[f"DR_{np.degrees(az)}"] = griddata(self.samples,self.roughness_data[metric][:,col],centroids)
+            roughness_data_vtk[f"DR_{np.degrees(az):03.1f}"] = griddata(self.samples,self.roughness_data[metric][:,col],centroids).astype(np.float32)
 
         for az, col in zip(self.az[:self.roughness_data_x2[metric].shape[1]],range(self.roughness_data_x2[metric].shape[1])):
-            roughness_data_vtk[f"2DR_{np.degrees(az)}"] = griddata(self.samples,self.roughness_data_x2[metric][:,col],centroids)
+            roughness_data_vtk[f"2DR_{np.degrees(az):03.1f}"] = griddata(self.samples,self.roughness_data_x2[metric][:,col],centroids).astype(np.float32)
 
         x = self.surface.points[:,0]
         y = self.surface.points[:,1]
@@ -426,31 +426,33 @@ class RoughnessMap:
             connectivity=conn,offsets=offset,cell_types=ctype,cellData=roughness_data_vtk)
 
         # Generate direction vector file
-        x = centroids[:,0]
-        y = centroids[:,1]
+        x = np.ascontiguousarray(centroids[:,0])
+        y = np.ascontiguousarray(centroids[:,1])
         z = griddata(self.surface.points[:,:2],self.surface.points[:,2],centroids)
         conn = np.arange(x.shape[0])
         offset = conn.astype(np.int64)+1
         ctype = np.ones(conn.shape[0],dtype=np.int64)*VtkVertex.tid
         normals = self.surface.normals
 
-        def generate_vtkdir_data(raw_dir_data):
+        def generate_vtkdir_data(raw_dir_data,magnitudes):
             dir = raw_dir_data
             dir = np.hstack([np.cos(dir[:,np.newaxis]),np.sin(dir[:,np.newaxis])])
             vtk_dir = griddata(self.samples,dir,centroids)
+            vtk_mag = griddata(self.samples,magnitudes,centroids)
             vtk_dir /= np.linalg.norm(vtk_dir,axis=1)[:,np.newaxis]
-            z = -(vtk_dir[:,0]*normals[:,0] + vtk_dir[:,1]*normals[:,1])/normals[:,2]
-            vtk_dir = np.hstack([vtk_dir,z[:,np.newaxis]])
-            vtk_dir/=np.linalg.norm(vtk_dir,axis=1)[:,np.newaxis]
-            vtk_dir = vtk_dir[:,0],vtk_dir[:,1],vtk_dir[:,2]
+            vtk_dir = np.hstack([vtk_dir,np.zeros([vtk_dir.shape[0],1])])
+            vtk_perp = np.vstack([-vtk_dir[:,1],vtk_dir[:,0],vtk_dir[:,2]]).T
+            vtk_dir = np.cross(vtk_perp,normals)*vtk_mag[:,np.newaxis]
+            
+            vtk_dir = np.ascontiguousarray(vtk_dir[:,0]),np.ascontiguousarray(vtk_dir[:,1]),np.ascontiguousarray(vtk_dir[:,2])
             return vtk_dir
         dir_data = {}
-        dir_data['min_unidirectional'] = generate_vtkdir_data(self.min_roughness_dir[metric])
-        dir_data['max_unidirectional'] = generate_vtkdir_data(self.max_roughness_dir[metric])
-        dir_data['min_bidirectional'] = generate_vtkdir_data(self.min_roughness_dir_x2[metric])
-        dir_data['max_bidirectional'] = generate_vtkdir_data(self.max_roughness_dir_x2[metric])
-        
-        unstructuredGridToVTK(
-            f"{file_prefix}_directions.vtk",x,y,z,
-            connectivity=conn.astype(np.int64),offsets=offset,cell_types=ctype,
-            cellData=dir_data)
+        dir_data['min_unidirectional'] = generate_vtkdir_data(self.min_roughness_dir[metric],self.min_roughness[metric])
+        dir_data['max_unidirectional'] = generate_vtkdir_data(self.max_roughness_dir[metric],self.max_roughness[metric])
+        dir_data['min_bidirectional'] = generate_vtkdir_data(self.min_roughness_dir_x2[metric],self.min_roughness_x2[metric])
+        dir_data['max_bidirectional'] = generate_vtkdir_data(self.max_roughness_dir_x2[metric],self.max_roughness_x2[metric])
+
+        pointsToVTK(
+            f"{file_prefix}_directions",x,y,z,
+            data=dir_data
+        )
