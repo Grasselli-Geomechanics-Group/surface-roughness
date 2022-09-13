@@ -270,9 +270,9 @@ class RoughnessMap:
         self.shape_sizes = np.array([c.shape_size for c in self.raw_roughness_calculators])
         self.total_areas = np.array([c.total_area for c in self.raw_roughness_calculators])
         
-        self.az = self.raw_roughness_calculators[0]['az']
+        self.az = self.raw_roughness_calculators[0]['az'][:,0]
         self.n_tri = [len(t_in_c) for t_in_c in self.t_in_circle]
-        self.n_tri_dir = np.vstack([c['n_tri'] for c in self.raw_roughness_calculators])
+        self.n_tri_dir = np.vstack([c['n_tri'].T for c in self.raw_roughness_calculators])
 
     def analyze_directional_roughness(self,metric:str):
         """Process the roughness results for plotting
@@ -281,12 +281,14 @@ class RoughnessMap:
         :type metric: str
         """
         print("Aggregating data")
-        self.roughness_data[metric] = np.vstack([c[metric] for c in tqdm(self.raw_roughness_calculators)])
+        self.roughness_data[metric] = np.vstack([c[metric].T for c in tqdm(self.raw_roughness_calculators)])
 
         print("Collecting stats")
         # Collect bidirectional data
-        self.n_tri_dir_x2 = self.n_tri_dir[:,self.az > np.pi-10**-12] +  self.n_tri_dir[:,self.az < np.pi-10**-12]
-        self.roughness_data_x2[metric] = self.roughness_data[metric][:,self.az >= np.pi-10**-12] +  self.roughness_data[metric][:,self.az < np.pi-10**-12]
+        gt = self.az >= np.pi-10**-12
+        lt = self.az < np.pi-10**-12
+        self.n_tri_dir_x2 = self.n_tri_dir[:,gt] +  self.n_tri_dir[:,lt]
+        self.roughness_data_x2[metric] = self.roughness_data[metric][:,gt] +  self.roughness_data[metric][:,lt]
         
         # Unidirectional roughness stats
         self.min_roughness[metric] = np.amin(self.roughness_data[metric],axis=1)

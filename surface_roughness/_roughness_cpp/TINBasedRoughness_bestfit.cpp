@@ -15,42 +15,9 @@
 #include <Eigen/Core>
 
 #include "DirectionalUtil.h"
+#include "Directional.h"
 
-TINBasedRoughness_bestfit::TINBasedRoughness_bestfit(
-    Eigen::MatrixX3d points, 
-    Eigen::MatrixX3i triangles) :
-	aligned(false),
-	points(points),
-	triangles(triangles)
-{
-    this->alignBestFit();
-    calculateNormals(this->points,this->triangles,this->normals);
-}
-
-TINBasedRoughness_bestfit::TINBasedRoughness_bestfit(
-    Eigen::MatrixX3d points, 
-    Eigen::MatrixX3i triangles,
-    Eigen::ArrayXi selected_triangles):
-	aligned(false)
-{
-	select_triangles(this->points,points,this->triangles,triangles,selected_triangles);
-    this->alignBestFit();
-    calculateNormals(this->points,this->triangles,this->normals);
-}
-
-void TINBasedRoughness_bestfit::alignBestFit()
-{
-	if (!this->aligned) {
-		BestFitResult result = align(this->points,this->triangles);
-		this->final_orientation = result.final_orientation;
-		this->min_bounds = result.min_bounds;
-		this->max_bounds = result.max_bounds;
-		this->centroid = result.centroid;
-		this->aligned = true;
-	}
-}
-
-void TINBasedRoughness_bestfit::evaluate(TINBasedRoughness_settings settings, bool verbose_,std::string file_path)
+void TINBasedRoughness_bestfit::evaluate(DirectionalSetting settings, bool verbose_,std::string file_path)
 {
     settings_ = settings;
     using namespace Eigen;
@@ -61,12 +28,15 @@ void TINBasedRoughness_bestfit::evaluate(TINBasedRoughness_settings settings, bo
 	typedef std::vector<Triangle> TriangleContainer;
     if (verbose_) std::cout << "Calculated areas\n";
 	// 1.0 Calculate analysis directions;
-	azimuths_ = M_PI / 180. * ArrayXd::LinSpaced((Index)settings_.at("n_az"),0., 360.-360./settings_.at("n_az"));
-	size_t n_directions = azimuths_.size();
-	azimuths_ += settings_.at("az_offset") * M_PI / 180.;
-	delta_a_ = ArrayXd::Zero(n_directions);
-    delta_star_a_ = ArrayXd::Zero(n_directions);
-    n_facing_triangles_ = ArrayXd::Zero(n_directions);
+	azimuths_.resize((Index)settings_.at("n_az"),1);
+	double step = 0;
+	for (auto az:azimuths_.rowwise()) {
+		az = Matrix<double,1,1>(step);
+		step += 2*M_PI/settings_.at("n_az") + settings.at("az_offset")*M_PI/180;
+	}		size_t n_directions = azimuths_.size();
+	delta_a_ = ArrayXXd::Zero(n_directions,1);
+    delta_star_a_ = ArrayXXd::Zero(n_directions,1);
+    n_facing_triangles_ = ArrayXXd::Zero(n_directions,1);
 
     if (verbose_) std::cout << "Calculated analysis directions\n";
 	// 2.0 Create triangles for analysis
@@ -144,18 +114,4 @@ void TINBasedRoughness_bestfit::evaluate(TINBasedRoughness_settings settings, bo
     normals.resize(0,0);
     triangle_mask.clear();
     areas.clear();
-}
-
-bool TINBasedRoughness_bestfit::save_file(std::string path) 
-{
-	return create_file(path,this->points,this->triangles,this->normals);
-}
-
-std::vector<std::string> TINBasedRoughness_bestfit::result_keys()
-{
-    using namespace std;
-    vector<string> keys(parameters.size());
-    std::transform(parameters.begin(),parameters.end(),keys.begin(),
-    [](const auto& param) { return param.first;});
-    return keys;
 }

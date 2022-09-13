@@ -20,6 +20,7 @@ else:
  
 roughness_cppimpl_sources = [
     "surface_roughness/_roughness_cppimpl.cpp",
+    "surface_roughness/_roughness_cpp/Directional.cpp",
     "surface_roughness/_roughness_cpp/DirectionalRoughness.cpp",
     "surface_roughness/_roughness_cpp/TINBasedRoughness.cpp",
     "surface_roughness/_roughness_cpp/TINBasedRoughness_bestfit.cpp",

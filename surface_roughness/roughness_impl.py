@@ -54,8 +54,8 @@ class DirRoughnessBase:
         :return: Pandas Dataframe containing roughness parameters 
         :rtype: pandas.Dataframe
         """
-        df_data = {key:self[key] for key in self.impl.result_keys() if not key is 'az'}
-        return DataFrame(df_data,index=self['az'])
+        df_data = {key:self[key][:,0] for key in self.impl.result_keys() if not key is 'az'}
+        return DataFrame(df_data,index=self['az'][:,0])
     
     def to_csv(self,*args,**kwargs):
         """Save pandas dataframe generated from roughness results as csv

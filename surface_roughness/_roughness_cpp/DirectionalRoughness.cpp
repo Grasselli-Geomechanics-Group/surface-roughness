@@ -9,45 +9,17 @@
 #include <Eigen/Core>
 
 #include "DirectionalUtil.h"
-
-DirectionalRoughness::DirectionalRoughness(
-    Eigen::MatrixX3d points, 
-    Eigen::MatrixX3i triangles) :
-	aligned(false),
-	points(points),
-	triangles(triangles)
-{
-    this->alignBestFit();
-    calculateNormals(this->points,this->triangles,this->normals);
-}
+#include "DIrectional.h"
 
 
-DirectionalRoughness::DirectionalRoughness(
-    Eigen::MatrixX3d points, 
-    Eigen::MatrixX3i triangles,
-    Eigen::ArrayXi selected_triangles):
-	aligned(false)
-{
-	select_triangles(this->points,points,this->triangles,triangles,selected_triangles);
-    this->alignBestFit();
-    calculateNormals(this->points,this->triangles,this->normals);
-}
-
-void DirectionalRoughness::alignBestFit()
-{
-	if (!this->aligned) {
-		BestFitResult result = align(this->points,this->triangles);
-		this->final_orientation = result.final_orientation;
-		this->min_bounds = result.min_bounds;
-		this->max_bounds = result.max_bounds;
-		this->centroid = result.centroid;
-		this->aligned = true;
-	}
-}
-
-void DirectionalRoughness::evaluate(DirectionalRoughness_settings settings, bool verbose_,std::string file_path) 
+void DirectionalRoughness::evaluate(DirectionalSetting settings, bool verbose_,std::string file_path) 
 {
 	settings_ = settings;
+	for (auto& it: DirectionalRoughness::Setting()) {
+		if (settings_.find(it.first) == settings_.end()) {
+			settings_.at(it.first) = it.second;
+		}
+	}
 	using namespace Eigen;
     this->alignBestFit();
     calculateNormals(this->points,this->triangles,this->normals);
@@ -214,19 +186,6 @@ void DirectionalRoughness::evaluate(DirectionalRoughness_settings settings, bool
     triangle_mask.clear();
     areas.clear();
 	
-}
-
-bool DirectionalRoughness::save_file(std::string path) 
-{
-	return create_file(path,this->points,this->triangles,this->normals);}
-
-std::vector<std::string> DirectionalRoughness::result_keys()
-{
-    using namespace std;
-    vector<string> keys(parameters.size());
-    std::transform(parameters.begin(),parameters.end(),keys.begin(),
-    [](const auto& param) { return param.first;});
-    return keys;
 }
 
 double gamma_dr(double Z)
