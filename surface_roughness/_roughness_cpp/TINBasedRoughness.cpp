@@ -93,17 +93,19 @@ void TINBasedRoughness::evaluate(TINBasedRoughness_settings settings, bool verbo
 		return;
 	}
 
-	MatrixX2d cartesian_az = pol2cart(azimuths_);
+	// MatrixX2d cartesian_az = pol2cart(azimuths_);
+	std::pair<ArrayXd,ArrayXd> az = pol2cart(azimuths_);
 
-	for (int az_i = 0; az_i < azimuths_.size(); ++az_i) {
+	for (Index az_i = 0; az_i < azimuths_.size(); ++az_i) {
 		if (verbose_) std::cout << "Calculated az" << std::to_string(az_i) << "\n";
         TriangleContainer evaluation;
+		evaluation.reserve(dir_triangle.size());
 		std::copy(dir_triangle.begin(), dir_triangle.end(), std::back_inserter(evaluation));
 
 		// Calculate apparent dip for each analysis direction
 		std::for_each(evaluation.begin(), evaluation.end(),
-			[&az_i, &cartesian_az](Triangle& triangle) {
-			triangle.set_apparent_dip(cartesian_az(az_i, 0), cartesian_az(az_i, 1));
+			[&az_i, &az](Triangle& triangle) {
+			triangle.set_apparent_dip(az.first(az_i), az.second(az_i));
 		});
         // Filter negative apparent dip
 		auto remove_it = std::remove_if(evaluation.begin(), evaluation.end(),

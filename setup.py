@@ -1,3 +1,4 @@
+import glob
 from setuptools import setup
 from pybind11.setup_helpers import Pybind11Extension, build_ext
 from pathlib import Path
@@ -29,9 +30,11 @@ roughness_cppimpl_includes = [
         'surface_roughness/_roughness_cpp/include',
         'eigen'
 ]
-roughness_cppimpl_depends = roughness_cppimpl_sources+roughness_cppimpl_includes
+headers = []
+[headers.extend(glob.glob(f+"/*.h")) for f in roughness_cppimpl_includes]
+roughness_cppimpl_depends = roughness_cppimpl_sources+headers
 roughness_cppimpl = Pybind11Extension(
-    "_roughness_cppimpl",
+    "surface_roughness._roughness_cppimpl",
     sources=roughness_cppimpl_sources,
     depends=roughness_cppimpl_depends,
     include_dirs=roughness_cppimpl_includes,
@@ -63,7 +66,7 @@ setup(
         'numexpr',
         'pandas',
         'matplotlib',
-        'pyevtk'        
+        'pyevtk'
     ],
     cmdclass={"build_ext":build_ext},
     zip_safe=False,
