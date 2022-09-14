@@ -23,13 +23,13 @@ class Surface:
     """This class loads a surface for surface roughness analysis.
     
     """
-    def __init__(self,path=None,mesh=None,preprocess=True,verbose=False) -> None:
+    def __init__(self,path=None,mesh=None,preprocess=True,verbose=True) -> None:
         super().__init__()
         self.verbose = verbose
         self._mesh = mesh
         if path:
             if verbose:
-                print("Loading mesh at path")
+                print(f"Loading mesh at {path}")
             self._mesh = read(path)
         self.n_triangles = len(self._mesh.cells_dict['triangle'])
         self.triangles : np.ndarray = self._mesh.cells_dict['triangle']

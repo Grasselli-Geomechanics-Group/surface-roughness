@@ -3,6 +3,7 @@ from ._roughness_cppimpl import (
     _cppDirectionalRoughness_impl,
     _cppDirectionalRoughness_Settings_impl,
     _cppTINBasedRoughness_impl,
+    _TINBasedRoughness_Evaluator,
     _cppTINBasedRoughness_bestfit_impl,
     _cppTINBasedRoughness_againstshear_impl,
     _cppTINBasedRoughness_Settings_impl,
@@ -21,6 +22,11 @@ def _rs(nominal_areas,total_areas):
 class DirRoughnessBase:
     """Base roughness class for directional roughness
     """
+    def __init__(self,**kwargs):
+        if kwargs['impl'] is not None:
+            self.impl = kwargs['impl']
+            self.settings = kwargs['impl'].current_settings()
+            
     def __getitem__(self,key):
         """Return a list of roughness parameters indexed by azimuth
 
@@ -134,16 +140,18 @@ class _cppDirectionalRoughness(DirRoughnessBase):
                 self.settings[key] = value
     
 class _cppTINBasedRoughness(DirRoughnessBase):
-    def __init__(self,points:np.ndarray,triangles:np.ndarray,triangle_mask:np.ndarray=None,**kwargs):
-        if triangle_mask is None:
-            self.impl = _cppTINBasedRoughness_impl(points,triangles)
+    def __init__(self,points:np.ndarray=None,triangles:np.ndarray=None,triangle_mask:np.ndarray=None,**kwargs):
+        if kwargs['impl'] == None:
+            if triangle_mask is None:
+                self.impl = _cppTINBasedRoughness_impl(points,triangles)
+            else:
+                self.impl = _cppTINBasedRoughness_impl(points,triangles,triangle_mask)
+            self.settings = _cppTINBasedRoughness_Settings_impl()
+            for key,value in kwargs.items():
+                if key in ['n_az','az_offset','min_triangles']:
+                    self.settings[key] = value
         else:
-            self.impl = _cppTINBasedRoughness_impl(points,triangles,triangle_mask)
-        self.settings = _cppTINBasedRoughness_Settings_impl()
-        for key,value in kwargs.items():
-            if key in ['n_az','az_offset','min_triangles']:
-                self.settings[key] = value
-
+            super().__init__(**kwargs)
 class _cppTINBasedRoughness_bestfit(DirRoughnessBase):
     def __init__(self,points:np.ndarray,triangles:np.ndarray,triangle_mask:np.ndarray=None,**kwargs):
         if triangle_mask is None:

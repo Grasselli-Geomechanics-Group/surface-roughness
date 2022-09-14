@@ -9,13 +9,13 @@ debug = False
 
 if debug:
     if platform.system() == "Windows":
-        cpp_args=['/Od','/Zi']
+        cpp_args=['/Od','/Zi','/openmp']
         linkargs = ['/DEBUG']
     else:
         cpp_args = []
         linkargs = []
 else:
-    cpp_args = []
+    cpp_args = ['/openmp']
     linkargs = []
  
 roughness_cppimpl_sources = [

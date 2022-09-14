@@ -25,6 +25,7 @@ from .roughness_impl import (
     _PyDirectionalRoughness,
     _PyTINBasedRoughness,
     _cppTINBasedRoughness,
+    _TINBasedRoughness_Evaluator,
     _cppTINBasedRoughness_againstshear,
     _cppTINBasedRoughness_bestfit,
     _cppMeanDipRoughness,
@@ -260,7 +261,10 @@ class RoughnessMap:
                 calc.evaluate(False)
             return calc
         print("Analyzing sampled roughness...")
-        self.raw_roughness_calculators:list[DirRoughnessBase] = [run_calc(i,tlist) for i,tlist in tqdm(enumerate(self.t_in_circle),total=len(self.t_in_circle))]
+        evaluator = _TINBasedRoughness_Evaluator(self.surface.points,self.surface.triangles)
+        calculators = evaluator.evaluate(self.t_in_circle)
+        self.raw_roughness_calculators = [DirRoughnessBase(impl=impl) for impl in calculators]
+        # self.raw_roughness_calculators:list[DirRoughnessBase] = [run_calc(i,tlist) for i,tlist in tqdm(enumerate(self.t_in_circle),total=len(self.t_in_circle))]
 
         # collect sample properties
         self.final_orientations = np.array([c.final_orientation for c in self.raw_roughness_calculators])

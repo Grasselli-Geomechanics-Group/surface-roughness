@@ -36,6 +36,7 @@ public:
 	Eigen::Vector3d get_centroid() {return centroid;}
 	std::vector<double> get_size() {return size_;}
 	double get_area() {return total_area;}
+    std::unordered_map<std::string,double> current_settings() {return settings_;}
 
 	Eigen::Vector3d get_final_orientation() { return final_orientation; }
     std::vector<std::string> result_keys();
