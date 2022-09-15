@@ -1,3 +1,4 @@
+import glob
 from setuptools import setup
 from pybind11.setup_helpers import Pybind11Extension, build_ext
 from pathlib import Path
@@ -8,17 +9,18 @@ debug = False
 
 if debug:
     if platform.system() == "Windows":
-        cpp_args=['/Od','/Zi']
+        cpp_args=['/Od','/Zi','/openmp']
         linkargs = ['/DEBUG']
     else:
         cpp_args = []
         linkargs = []
 else:
-    cpp_args = []
+    cpp_args = ['/openmp']
     linkargs = []
  
 roughness_cppimpl_sources = [
     "surface_roughness/_roughness_cppimpl.cpp",
+    "surface_roughness/_roughness_cpp/Directional.cpp",
     "surface_roughness/_roughness_cpp/DirectionalRoughness.cpp",
     "surface_roughness/_roughness_cpp/TINBasedRoughness.cpp",
     "surface_roughness/_roughness_cpp/TINBasedRoughness_bestfit.cpp",
@@ -29,9 +31,11 @@ roughness_cppimpl_includes = [
         'surface_roughness/_roughness_cpp/include',
         'eigen'
 ]
-roughness_cppimpl_depends = roughness_cppimpl_sources+roughness_cppimpl_includes
+headers = []
+[headers.extend(glob.glob(f+"/*.h")) for f in roughness_cppimpl_includes]
+roughness_cppimpl_depends = roughness_cppimpl_sources+headers
 roughness_cppimpl = Pybind11Extension(
-    "_roughness_cppimpl",
+    "surface_roughness._roughness_cppimpl",
     sources=roughness_cppimpl_sources,
     depends=roughness_cppimpl_depends,
     include_dirs=roughness_cppimpl_includes,
@@ -62,8 +66,7 @@ setup(
         'numpy',
         'numexpr',
         'pandas',
-        'matplotlib',
-        'pyevtk'        
+        'matplotlib'
     ],
     cmdclass={"build_ext":build_ext},
     zip_safe=False,

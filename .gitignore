@@ -13,3 +13,9 @@ test_sampling
 *.svg
 prebuild/OpenBLAS-0.3.20-x86/
 *.whl
+*.vtu
+*.pdf
+*.so
+*.code-workspace
+*.diagsession
+*.data*

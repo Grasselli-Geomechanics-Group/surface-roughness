@@ -166,25 +166,34 @@ struct BestFitResult {
     Eigen::Vector3d centroid;
 };
 
+static Eigen::Matrix3d rotation2zpos(Eigen::Vector3d vector) {
+	using namespace Eigen;
+	Vector3d v_orig = vector.normalized();
+	Vector3d up(0,0,1);
+	Vector3d v = v_orig.cross(up);
+	double c = v_orig.dot(up);
+
+	Matrix3d v_skew;
+	v_skew << 
+	0, -v[2], v[1],
+	v[2], 0, -v[0],
+	-v[1], v[0], 0;
+	Matrix3d vsquared = (v_skew.array().square()).matrix();
+	return MatrixXd::Identity(3,3) + v_skew + vsquared/(1+c);
+}
+
 static BestFitResult align(Eigen::MatrixX3d& points, Eigen::MatrixX3i& triangles) {
     using namespace Eigen;
 
     Vector3d initial_orientation = plane_normal(points);
     Vector3d current_orientation = initial_orientation;
-    // Rotate 3 times to improve accuracy
-    for (int rep = 0; rep < 3; ++rep) {
-        double theta = -std::asin(
-            current_orientation(0)*current_orientation(0) +
-            current_orientation(1)*current_orientation(1));
-
-        Vector3d rot_axis(current_orientation(1),-current_orientation(0),0);
-        rot_axis = rot_axis.normalized();
-
+    // Rotate 2 times to improve accuracy
+    for (int rep = 0; rep < 2; ++rep) {
         // Calculate rotation matrix
-        AngleAxis<double> rotation(theta,rot_axis);
-        
+        MatrixXd rotation = rotation2zpos(current_orientation);
+
         // Rotate points
-        points = (rotation.matrix() * points.transpose()).transpose();
+		points = points * rotation.transpose();
         
         current_orientation = plane_normal(points);
     }
@@ -283,14 +292,14 @@ static bool create_file(std::string path, Eigen::MatrixX3d& points, Eigen::Matri
 	}
 }
 
-static Eigen::MatrixX2d pol2cart(Eigen::ArrayXd azimuth) {
+static std::pair<Eigen::ArrayXd,Eigen::ArrayXd> pol2cart(Eigen::ArrayXd azimuth) {
     using namespace Eigen;
 	// Polar to cartesian transformation by vector
 	ArrayXd Tx = azimuth.cos();
 	ArrayXd Ty = azimuth.sin();
 
-	MatrixX2d T(azimuth.size(),2);
-	T << Tx,Ty;
-	return T;
+	// MatrixX2d T(azimuth.size(),2);
+	// T << Tx,Ty;
+	return std::pair<ArrayXd,ArrayXd>(Tx,Ty);
 }
 #endif //_DIRECTIONALUTIL_H

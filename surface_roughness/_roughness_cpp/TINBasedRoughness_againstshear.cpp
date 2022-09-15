@@ -15,42 +15,9 @@
 #include <Eigen/Core>
 
 #include "DirectionalUtil.h"
+#include "Directional.h"
 
-TINBasedRoughness_againstshear::TINBasedRoughness_againstshear(
-    Eigen::MatrixX3d points, 
-    Eigen::MatrixX3i triangles) :
-	aligned(false),
-	points(points),
-	triangles(triangles)
-{
-    this->alignBestFit();
-    calculateNormals(this->points,this->triangles,this->normals);
-}
-
-TINBasedRoughness_againstshear::TINBasedRoughness_againstshear(
-    Eigen::MatrixX3d points, 
-    Eigen::MatrixX3i triangles,
-    Eigen::ArrayXi selected_triangles):
-	aligned(false)
-{
-	select_triangles(this->points,points,this->triangles,triangles,selected_triangles);
-    this->alignBestFit();
-    calculateNormals(this->points,this->triangles,this->normals);
-}
-
-void TINBasedRoughness_againstshear::alignBestFit()
-{
-	if (!this->aligned) {
-		BestFitResult result = align(this->points,this->triangles);
-		this->final_orientation = result.final_orientation;
-		this->min_bounds = result.min_bounds;
-		this->max_bounds = result.max_bounds;
-		this->centroid = result.centroid;
-		this->aligned = true;
-	}
-}
-
-void TINBasedRoughness_againstshear::evaluate(TINBasedRoughness_settings settings, bool verbose_,std::string file_path)
+void TINBasedRoughness_againstshear::evaluate(DirectionalSetting settings, bool verbose_,std::string file_path)
 {
     settings_ = settings;
     using namespace Eigen;
@@ -60,12 +27,15 @@ void TINBasedRoughness_againstshear::evaluate(TINBasedRoughness_settings setting
 	typedef std::vector<Triangle> TriangleContainer;
     if (verbose_) std::cout << "Calculated areas\n";
 	// 1.0 Calculate analysis directions;
-	azimuths_ = M_PI / 180. * ArrayXd::LinSpaced((Index)settings_.at("n_az"),0., 360.-360./settings_.at("n_az"));
-	size_t n_directions = azimuths_.size();
-	azimuths_ += settings_.at("az_offset") * M_PI / 180.;
-	delta_n_ = ArrayXd::Zero(n_directions);
-    delta_star_n_ = ArrayXd::Zero(n_directions);
-    n_facing_triangles_ = ArrayXd::Zero(n_directions);
+	azimuths_.resize((Index)settings_.at("n_az"),1);
+	double step = 0;
+	for (auto az:azimuths_.rowwise()) {
+		az = Matrix<double,1,1>(step);
+		step += 2*M_PI/settings_.at("n_az") + settings.at("az_offset")*M_PI/180;
+	}		size_t n_directions = azimuths_.size();
+	delta_n_ = ArrayXXd::Zero(n_directions,1);
+    delta_star_n_ = ArrayXXd::Zero(n_directions,1);
+    n_facing_triangles_ = ArrayXXd::Zero(n_directions,1);
 
     if (verbose_) std::cout << "Calculated analysis directions\n";
 	// 2.0 Create triangles for analysis
@@ -94,17 +64,19 @@ void TINBasedRoughness_againstshear::evaluate(TINBasedRoughness_settings setting
 		return;
 	}
 
-	MatrixX2d cartesian_az = pol2cart(azimuths_);
+	// MatrixX2d cartesian_az = pol2cart(azimuths_);
+	std::pair<ArrayXd,ArrayXd> az = pol2cart(azimuths_);
 
 	for (Index az_i = 0; az_i < azimuths_.size(); ++az_i) {
 		if (verbose_) std::cout << "Calculated az" << std::to_string(az_i) << "\n";
         TriangleContainer evaluation;
+		evaluation.reserve(dir_triangle.size());
 		std::copy(dir_triangle.begin(), dir_triangle.end(), std::back_inserter(evaluation));
 
 		// Calculate apparent dip for each analysis direction
 		std::for_each(evaluation.begin(), evaluation.end(),
-			[&az_i, &cartesian_az](Triangle& triangle) {
-			triangle.set_apparent_dip(cartesian_az(az_i, 0), cartesian_az(az_i, 1), true);
+			[&az_i, &az](Triangle& triangle) {
+			triangle.set_apparent_dip(az.first(az_i), az.second(az_i), true);
 		});
         // Filter negative apparent dip
 		auto remove_it = std::remove_if(evaluation.begin(), evaluation.end(),
@@ -140,18 +112,4 @@ void TINBasedRoughness_againstshear::evaluate(TINBasedRoughness_settings setting
     normals.resize(0,0);
     triangle_mask.clear();
     areas.clear();
-}
-
-bool TINBasedRoughness_againstshear::save_file(std::string path) 
-{
-	return create_file(path,this->points,this->triangles,this->normals);
-}
-
-std::vector<std::string> TINBasedRoughness_againstshear::result_keys()
-{
-    using namespace std;
-    vector<string> keys(parameters.size());
-    std::transform(parameters.begin(),parameters.end(),keys.begin(),
-    [](const auto& param) { return param.first;});
-    return keys;
 }

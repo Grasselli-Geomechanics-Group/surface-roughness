@@ -1,3 +1,4 @@
+from collections import deque
 
 from meshio import read
 import numpy as np
@@ -23,13 +24,13 @@ class Surface:
     """This class loads a surface for surface roughness analysis.
     
     """
-    def __init__(self,path=None,mesh=None,preprocess=True,verbose=False) -> None:
+    def __init__(self,path=None,mesh=None,preprocess=True,verbose=True,calculate_edges=False) -> None:
         super().__init__()
         self.verbose = verbose
         self._mesh = mesh
         if path:
             if verbose:
-                print("Loading mesh at path")
+                print(f"Loading mesh at {path}")
             self._mesh = read(path)
         self.n_triangles = len(self._mesh.cells_dict['triangle'])
         self.triangles : np.ndarray = self._mesh.cells_dict['triangle']
@@ -45,13 +46,28 @@ class Surface:
         self._meandip = None
 
         self._roughness_map = None
-        
+        self.calculate_edges = calculate_edges 
+        self.edge_bounds = None      
         if preprocess:
             self.preprocess()
         if verbose:
             print("Calculating normals...")
         self._calculate_normals()
     
+    @property
+    def original_points(self):
+        return self._mesh.points
+
+    @property
+    def original_normals(self):
+        original_points = self.original_points
+        v1v0 = np.array([original_points[tri_i[1]] - original_points[tri_i[0]] for tri_i in self.triangles])
+        v2v0 = np.array([original_points[tri_i[2]] - original_points[tri_i[0]] for tri_i in self.triangles])
+        normals = np.cross(v1v0,v2v0,axisa=1,axisb=1)
+        normals /= np.linalg.norm(self.normals,axis=1)[:,np.newaxis]
+
+        return normals
+
     def convex_bounds(self):
         h = ConvexHull(self.points[:,:2])
 
@@ -71,7 +87,49 @@ class Surface:
         if self.verbose:
             print("Calculating areas...")
         self._calculate_areas()
+        if self.calculate_edges:
+            if self.verbose:
+                print("Calculating edge bounds")
+            self._calculate_edges()
 
+    def _calculate_edges(self):
+        if self.edge_bounds is None:
+            def h(edge):
+                return tuple(sorted(edge))
+            edge_count = {}
+            def add_edge(edge):
+                if h(edge) not in edge_count:
+                    edge_count[h(edge)] = 1
+                else:
+                    del edge_count[h(edge)]
+            for triangle in self.triangles:
+                add_edge(triangle[:2])
+                add_edge(triangle[1:3])
+                add_edge(np.array([triangle[2],triangle[0]]))
+
+            edges = []
+            edges = [[edge0,edge1] for edge0,edge1 in edge_count.keys()]
+
+            polygon_loop = [edges[0]]
+            del edges[0]
+            current_loop = polygon_loop[0]
+            while len(edges) > 0:
+                for i,edge in enumerate(edges):
+                    if edge[0] == current_loop[-1]:
+                        current_loop.append(edge[1])
+                        break
+                    elif edge[1] == current_loop[-1]:
+                        current_loop.append(edge[0])
+                        break
+                if i < len(edges):
+                    del edges[i]
+                else:
+                    polygon_loop.append(edges[0])
+                    current_loop = polygon_loop[-1]
+            self.polygon_loop = sorted(polygon_loop,key=lambda x: len(x))[-1]
+            del self.polygon_loop[-1]
+            self.edge_bounds = np.vstack([self.points[index] for index in polygon_loop])
+    
     @property
     def area(self):
         return np.sum(self._areas)
@@ -92,7 +150,7 @@ class Surface:
         up = np.array([0,0,1.])
         v = np.cross(v_orig,up)
         c = np.dot(v_orig,up)
-        s = np.linalg.norm(v_orig)
+        s = np.linalg.norm(v)
 
         v_skew = np.array([
             [0,-v[2],v[1]],
@@ -101,32 +159,34 @@ class Surface:
         ])
         return np.eye(3) + v_skew + v_skew.dot(v_skew)*(1-c)/s**2
     
+    @staticmethod
+    def _calculate_surface_normal(points):
+        p_temp = points - points.mean(axis=0)
+        u,s,_ = np.linalg.svd(p_temp.T,full_matrices=False)
+        normal = u[:,np.argmin(s)]
+        normal /= np.linalg.norm(normal)
+        return normal
+    
+    @property
+    def surface_normal(self):
+        return Surface._calculate_surface_normal(self.points)
+
     def _align_best_fit(self):
         self.centroid = np.mean(self.points,axis=0)
         zeroed_points = self.points - self.centroid
-        u,_,_ = np.linalg.svd(zeroed_points.T,full_matrices=False)
-        self.initial_orientation = u[:,2]
-        orientation = u[:,2]
-        # Iterating twice provides enough accuracy
-        for _ in range(2):
-            u,_,_ = np.linalg.svd(zeroed_points.T,full_matrices=False)
-            orientation = u[:,2]
-            orientation /= np.linalg.norm(orientation)
-            self.x_rot = np.arcsin(orientation[0])
-            self.y_rot = np.arcsin(orientation[1])
+        self.initial_orientation = self.surface_normal
+        orientation = self.surface_normal
 
-            # rot_mat = Rotation.align_vectors(self.initial_orientation[np.newaxis,:],np.array([[0,0,1]]))[0].as_matrix()
-            rot_mat = Surface._find_rotmatrix_2_z_pos(orientation)
-            # zeroed_points = np.array([rot_mat @ p for p in zeroed_points])
-            zeroed_points = (rot_mat @ zeroed_points.T).T
-        self.points = zeroed_points + self.centroid
+        self.x_rot = np.arcsin(orientation[0])
+        self.y_rot = np.arcsin(orientation[1])
+
+        rot_mat = Surface._find_rotmatrix_2_z_pos(orientation)
+        self.points = zeroed_points @ rot_mat.T + self.centroid
 
     def _calculate_normals(self):
         v1v0 = np.array([self.points[tri_i[1]] - self.points[tri_i[0]] for tri_i in self.triangles])
         v2v0 = np.array([self.points[tri_i[2]] - self.points[tri_i[0]] for tri_i in self.triangles])
-        # self.normals = [np.cross(v1,v2) for v1,v2 in zip(v1v0,v2v0)]
         self.normals = np.cross(v1v0,v2v0,axisa=1,axisb=1)
-        # self.normals = np.array([n/np.linalg.norm(n) for n in self.normals])
         self.normals /= np.linalg.norm(self.normals,axis=1)[:,np.newaxis]
 
     def _calculate_areas(self):
@@ -158,9 +218,9 @@ class Surface:
         dr_kwargs.setdefault('fit_beta',0.5)
         dr_kwargs.setdefault('min_triangles',200)
 
-        if impl is 'cpp':
+        if impl == 'cpp':
             self._thetamax_cp1 = _cppDirectionalRoughness(self.points,self.triangles,**dr_kwargs)
-        elif impl is 'py':
+        elif impl == 'py':
             self._thetamax_cp1 = _PyDirectionalRoughness(self.points,self.triangles,self.normals,self._areas,**dr_kwargs)
         else:
             raise ValueError("evaluate_dr argument impl must be either 'cpp' or 'py'")
@@ -179,16 +239,16 @@ class Surface:
         tin_kwargs.setdefault('n_directions',72)
         tin_kwargs.setdefault('n_offset',0)
         tin_kwargs.setdefault('min_triangles',200)
-        if impl is 'cpp':
+        if impl == 'cpp':
             self._delta_t = _cppTINBasedRoughness(self.points,self.triangles,**tin_kwargs)
-        elif impl is 'py':
+        elif impl == 'py':
             self._delta_t = _PyTINBasedRoughness(self.points,self.triangles,self._areas,self.normals,**tin_kwargs)
         else:
             raise ValueError("evaluate_TIN argument impl must be either 'cpp' or 'py'")
         self._delta_t.evaluate(verbose)
 
     def delta_t(self,value=None,**tin_kwargs):
-        if value is None:
+        if value == None:
             return self._delta_t
         if (not self._delta_t) or tin_kwargs:
             self.evaluate_delta_t(**tin_kwargs)
@@ -202,16 +262,16 @@ class Surface:
         tin_kwargs.setdefault('n_directions',72)
         tin_kwargs.setdefault('n_offset',0)
         tin_kwargs.setdefault('min_triangles',200)
-        if impl is 'cpp':
+        if impl == 'cpp':
             self._delta_a = _cppTINBasedRoughness_bestfit(self.points,self.triangles,**tin_kwargs)
-        elif impl is 'py':
+        elif impl == 'py':
             self._delta_a = _PyTINBasedRoughness_bestfit(self.points,self.triangles,self._areas,self.normals,**tin_kwargs)
         else:
             raise ValueError("evaluate_TIN argument impl must be either 'cpp' or 'py'")
         self._delta_a.evaluate(verbose)
 
     def delta_a(self,value=None,**tin_kwargs):
-        if value is None:
+        if value == None:
             return self._delta_a
         if (not self._delta_a) or tin_kwargs:
             self.evaluate_delta_a(**tin_kwargs)
@@ -225,16 +285,16 @@ class Surface:
         tin_kwargs.setdefault('n_directions',72)
         tin_kwargs.setdefault('n_offset',0)
         tin_kwargs.setdefault('min_triangles',200)
-        if impl is 'cpp':
+        if impl == 'cpp':
             self._delta_n = _cppTINBasedRoughness_againstshear(self.points,self.triangles,**tin_kwargs)
-        elif impl is 'py':
+        elif impl == 'py':
             self._delta_n = _PyTINBasedRoughness_againstshear(self.points,self.triangles,self._areas,self.normals,**tin_kwargs)
         else:
             raise ValueError("evaluate_TIN argument impl must be either 'cpp' or 'py'")
         self._delta_n.evaluate(verbose)
 
     def delta_n(self,value=None,**tin_kwargs):
-        if value is None:
+        if value == None:
             return self._delta_n
         if (not self._delta_n) or tin_kwargs:
             self.evaluate_delta_n(**tin_kwargs)
@@ -248,16 +308,16 @@ class Surface:
         tin_kwargs.setdefault('n_directions',72)
         tin_kwargs.setdefault('n_offset',0)
         tin_kwargs.setdefault('min_triangles',200)
-        if impl is 'cpp':
+        if impl == 'cpp':
             self._meandip = _cppMeanDipRoughness(self.points,self.triangles,**tin_kwargs)
-        elif impl is 'py':
+        elif impl == 'py':
             self._meandip = _PyMeanDipRoughness(self.points,self.triangles,self._areas,self.normals,**tin_kwargs)
         else:
             raise ValueError("evaluate_TIN argument impl must be either 'cpp' or 'py'")
         self._meandip.evaluate(verbose)
 
     def meandip(self,value=None,**tin_kwargs):
-        if value is None:
+        if value == None:
             return self._meandip
         if (not self._meandip) or tin_kwargs:
             self.evaluate_meandip(**tin_kwargs)

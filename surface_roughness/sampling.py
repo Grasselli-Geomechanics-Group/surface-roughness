@@ -1,4 +1,3 @@
-from fileinput import filename
 from itertools import compress
 import os
 from typing import Union
@@ -7,10 +6,11 @@ import numpy as np
 import numexpr as ne
 from pandas import DataFrame, concat
 from tqdm import tqdm
-from tqdm.contrib import tmap
+from tqdm.contrib import tenumerate
 import matplotlib.pyplot as plt
-from pyevtk.hl import unstructuredGridToVTK, pointsToVTK
-from pyevtk.vtk import VtkTriangle,VtkVertex
+from matplotlib.backends.backend_pdf import PdfPages
+
+import meshio
 
 from scipy.stats import gaussian_kde
 from scipy.interpolate import griddata
@@ -21,6 +21,7 @@ from .roughness_impl import (
     _PyDirectionalRoughness,
     _PyTINBasedRoughness,
     _cppTINBasedRoughness,
+    _TINBasedRoughness_Evaluator,
     _cppTINBasedRoughness_againstshear,
     _cppTINBasedRoughness_bestfit,
     _cppMeanDipRoughness,
@@ -111,43 +112,74 @@ class RoughnessMap:
         self.min_roughness_dir = {}
         self.max_roughness = {}
         self.max_roughness_dir = {}
+        self.minperp_roughness = {}
+        self.minperp_roughness_dir = {}
         self.min_roughness_x2 = {}
         self.min_roughness_dir_x2 = {}
         self.max_roughness_x2 = {}
         self.max_roughness_dir_x2 = {}
+        self.minperp_roughness_x2 = {}
+        self.minperp_roughness_dir_x2 = {}
 
         self.diropts = {
             'min_unidirectional':self.min_roughness_dir,
             'max_unidirectional':self.max_roughness_dir,
+            'minperp_unidirectional':self.minperp_roughness_dir,
             'min_bidirectional':self.min_roughness_dir_x2,
-            'max_bidirectional':self.max_roughness_dir_x2
+            'max_bidirectional':self.max_roughness_dir_x2,
+            'minperp_bidirectional':self.minperp_roughness_dir_x2
         }
         self.magopts = {
             'min_unidirectional':self.min_roughness,
             'max_unidirectional':self.max_roughness,
+            'minperp_unidirectional':self.minperp_roughness,
             'min_bidirectional':self.min_roughness_x2,
-            'max_bidirectional':self.max_roughness_x2
+            'max_bidirectional':self.max_roughness_x2,
+            'minperp_bidirectional':self.minperp_roughness_x2
         }
         self.label = {
             'min_bidirectional':'Min. 2DR',
             'max_bidirectional':'Max. 2DR',
+            'minperp_bidirectional':'Min. Perp. 2DR',
             'min_unidirectional':'Min. DR',
-            'max_unidirectional':'Max. DR'
+            'max_unidirectional':'Max. DR',
+            'minperp_unidirectional':'Min. Perp. DR'
         }
 
     @staticmethod
     def _in_circle(x,y,cx,cy,r):
         # https://stackoverflow.com/questions/59963642/is-there-a-fast-python-algorithm-to-find-all-points-in-a-dataset-which-lie-in-a
         return ne.evaluate('(x - cx)**2 + (y-cy)**2 < r**2')
+
+    def _reorient_points(self,samples,verbose):
+        iter = tenumerate(list(samples)) if verbose else samples
+        p_in_sample = [None]*len(samples)
+        for i,sample in iter:
+            if np.any(sample):
+                p = self.surface.points[sample]
+                
+                normal = Surface._calculate_surface_normal(p)
+                rot_mat = Surface._find_rotmatrix_2_z_pos(normal)
+                centroid = p.mean(axis=0)
+                p = (p-centroid) @ rot_mat.T + centroid
+                point_indices = np.where(sample)[0][RoughnessMap._in_circle(p[:,0],p[:,1],self.samples[i,0],self.samples[i,1],self.sample_window.radius)]
+                p_in_sample[i] = np.zeros(sample.size,dtype=np.bool_)
+                p_in_sample[i][point_indices] = True
+            else:
+                p_in_sample[i] = np.zeros(sample.size,dtype=np.bool_)
+        
+        return np.array(p_in_sample)
     
     @staticmethod
     def _triangles_from_p_in_sample(triangles,point_in_sample):
         return np.all(point_in_sample[triangles],axis=1)
 
 
-    def sample(self,verbose=False):
+    def sample(self,oriented=True,verbose=False):
         """Generate samples based on the sample window and spacing provided
 
+        :param oriented: Samples points with respect to normal of localized area, defaults to True
+        :type oriented: bool, optional
         :param verbose: Enables command line output, defaults to False
         :type verbose: bool, optional
         """
@@ -155,7 +187,7 @@ class RoughnessMap:
             print("Sampling...")
         bounds = self.surface.bounds()
         n = (bounds[1,:] - bounds[0,:]) / self.sample_spacing
-        n = np.ceil(n).astype(np.int)
+        n = np.ceil(n).astype(np.int)+1
         xpoints = np.linspace(
             bounds[0,0]+self.seed_left_offset,
             bounds[0,0]+self.seed_left_offset+self.sample_spacing*n[0],
@@ -169,8 +201,10 @@ class RoughnessMap:
 
         if verbose:
             print("Finding samples...")
+        expansion_factor = 1 if not oriented else 1.2
         if self.sample_window.is_circle:
             if verbose:
+                print("Point search")
                 sample_iter = tqdm(self.samples,total=self.samples.shape[0])
             else:
                 sample_iter = self.samples
@@ -178,9 +212,15 @@ class RoughnessMap:
                 self.surface.points[:,0],
                 self.surface.points[:,1],
                 sample[0],
-                sample[1],self.sample_window.radius) for sample in sample_iter])
+                sample[1],self.sample_window.radius*expansion_factor) for sample in sample_iter])
             
+            if oriented:
+                if verbose:
+                    print("Reorienting points")
+                p_in_sample = self._reorient_points(p_in_sample,verbose)
+
             if verbose:
+                print("Triangle search")
                 p_in_sample_iter = tqdm(p_in_sample,total=len(p_in_sample))
             else:
                 p_in_sample_iter = p_in_sample
@@ -209,7 +249,6 @@ class RoughnessMap:
                 os.mkdir(folder)
         # Load data and run
         def run_calc(i,tlist):
-
             calc = self._methods[self.roughness_method](self.surface.points,self.surface.triangles,tlist)
             if folder is not None:
                 file_name = os.path.join(folder,f"{file_prefix}_{i}.stl")
@@ -218,7 +257,10 @@ class RoughnessMap:
                 calc.evaluate(False)
             return calc
         print("Analyzing sampled roughness...")
-        self.raw_roughness_calculators:list[DirRoughnessBase] = [run_calc(i,tlist) for i,tlist in tqdm(enumerate(self.t_in_circle),total=len(self.t_in_circle))]
+        evaluator = _TINBasedRoughness_Evaluator(self.surface.points,self.surface.triangles)
+        calculators = evaluator.evaluate(self.t_in_circle)
+        self.raw_roughness_calculators = [DirRoughnessBase(impl=impl) for impl in calculators]
+        # self.raw_roughness_calculators:list[DirRoughnessBase] = [run_calc(i,tlist) for i,tlist in tqdm(enumerate(self.t_in_circle),total=len(self.t_in_circle))]
 
         # collect sample properties
         self.final_orientations = np.array([c.final_orientation for c in self.raw_roughness_calculators])
@@ -228,9 +270,9 @@ class RoughnessMap:
         self.shape_sizes = np.array([c.shape_size for c in self.raw_roughness_calculators])
         self.total_areas = np.array([c.total_area for c in self.raw_roughness_calculators])
         
-        self.az = self.raw_roughness_calculators[0]['az']
+        self.az = self.raw_roughness_calculators[0]['az'][:,0]
         self.n_tri = [len(t_in_c) for t_in_c in self.t_in_circle]
-        self.n_tri_dir = np.vstack([c['n_tri'] for c in self.raw_roughness_calculators])
+        self.n_tri_dir = np.vstack([c['n_tri'].T for c in self.raw_roughness_calculators])
 
     def analyze_directional_roughness(self,metric:str):
         """Process the roughness results for plotting
@@ -238,22 +280,35 @@ class RoughnessMap:
         :param metric: Metric to analyze directional roughness
         :type metric: str
         """
-        
-        self.roughness_data[metric] = np.vstack([c[metric] for c in self.raw_roughness_calculators])
+        print("Aggregating data")
+        self.roughness_data[metric] = np.vstack([c[metric].T for c in tqdm(self.raw_roughness_calculators)])
+
+        print("Collecting stats")
         # Collect bidirectional data
-        self.n_tri_dir_x2 = self.n_tri_dir[:,self.az >= np.pi] +  self.n_tri_dir[:,self.az < np.pi]
-        self.roughness_data_x2[metric] = self.roughness_data[metric][:,self.az >= np.pi] +  self.roughness_data[metric][:,self.az < np.pi]
+        gt = self.az >= np.pi-10**-12
+        lt = self.az < np.pi-10**-12
+        self.n_tri_dir_x2 = self.n_tri_dir[:,gt] +  self.n_tri_dir[:,lt]
+        self.roughness_data_x2[metric] = self.roughness_data[metric][:,gt] +  self.roughness_data[metric][:,lt]
         
         # Unidirectional roughness stats
         self.min_roughness[metric] = np.amin(self.roughness_data[metric],axis=1)
         self.min_roughness_dir[metric] = self.az[np.argmin(self.roughness_data[metric],axis=1)]
+
+        self.minperp_roughness_dir[metric] = self.min_roughness_dir[metric] + np.pi/2
+        minperp_idx = np.argmin(np.abs(self.roughness_data[metric]-self.minperp_roughness_dir[metric][:,np.newaxis]),axis=1)
+        self.minperp_roughness[metric] = np.array([self.roughness_data[metric][row,idx] for row,idx in enumerate(minperp_idx)])
         
         self.max_roughness[metric] = np.amax(self.roughness_data[metric],axis=1)
         self.max_roughness_dir[metric] = self.az[np.argmax(self.roughness_data[metric],axis=1)]
+        
 
         # Bidirectional roughness stats
         self.min_roughness_x2[metric] = np.amin(self.roughness_data_x2[metric],axis=1)
         self.min_roughness_dir_x2[metric] = self.az[np.argmin(self.roughness_data_x2[metric],axis=1)]
+
+        self.minperp_roughness_dir_x2[metric] = self.min_roughness_dir_x2[metric] + np.pi/2
+        minperp_idx = np.argmin(np.abs(self.roughness_data_x2[metric]-self.minperp_roughness_dir_x2[metric][:,np.newaxis]),axis=1)
+        self.minperp_roughness_x2[metric] = np.array([self.roughness_data_x2[metric][row,idx] for row,idx in enumerate(minperp_idx)])
         
         self.max_roughness_x2[metric] = np.amax(self.roughness_data_x2[metric],axis=1)
         self.max_roughness_dir_x2[metric] = self.az[np.argmax(self.roughness_data_x2[metric],axis=1)]
@@ -318,6 +373,7 @@ class RoughnessMap:
         if ax is None:
             fig, ax = plt.subplots(subplot_kw={'projection':'polar'},**fig_kwargs)
         ax.plot(self.az,self.roughness_data[metric][sample_num])
+        return fig,ax
 
     def plot_distribution(self,metric:str,stat:str,n_bins,ax=None,**fig_kwargs):
         """Plot KDE and histogram distribution of data
@@ -331,8 +387,10 @@ class RoughnessMap:
         :return: matplotlib.pyplot.subplots return parameters
         :rtype: Figure, axes.Axes
         """
-        kern = gaussian_kde(self.magopts[stat][metric])
-        x_range = np.linspace(np.amin(self.magopts[stat][metric]),np.amax(self.magopts[stat][metric]))
+        magopts = self.magopts[stat][metric]
+        ind = ~np.isnan(magopts)
+        kern = gaussian_kde(magopts[ind])
+        x_range = np.linspace(np.amin(magopts[ind]),np.amax(magopts[ind]))
         pdf = kern.evaluate(x_range)
         if ax is None:
             fig,ax = plt.subplots(**fig_kwargs)
@@ -383,8 +441,11 @@ class RoughnessMap:
         """
         if ax is None:
             fig,ax = plt.subplots(**fig_kwargs)
-        maxdrmag = ax.tricontourf(self.samples[:,0],self.samples[:,1],self.magopts[stat][metric],levels=n_colours,extend='neither')
-        cb = plt.colorbar(maxdrmag)
+        magopts = self.magopts[stat][metric]
+        ind = ~np.isnan(magopts)
+        
+        mag = ax.tricontourf(self.samples[ind,0],self.samples[ind,1],magopts[ind],levels=n_colours,extend='neither')
+        cb = plt.colorbar(mag)
         cb.set_label(colorbar_label)
 
         ax.set_title(f'{self.label[stat]} magnitude')
@@ -417,84 +478,111 @@ class RoughnessMap:
 
             sample_df['Area'] = calc.total_area
 
-            
-
             return sample_df
 
         dfs = concat([_build_df_row(c) for c in self.raw_roughness_calculators])
         for key in self.max_roughness.keys():
-            dfs['MaxDR_'+key] = self.max_roughness[key]
-            dfs['MaxDR_Direction'+key] = self.max_roughness_dir[key]
-            dfs['Max2DR'+key] = self.max_roughness_x2[key]
-            dfs['Max2DR_Direction'+key] = self.max_roughness_dir_x2[key]
+            dfs['max_unidirectional_magnitude-'+key] = self.max_roughness[key]
+            dfs['max_unidirectional_orientation-'+key] = self.max_roughness_dir[key]
+            dfs['max_bidirectional_magnitude-'+key] = self.max_roughness_x2[key]
+            dfs['max_bidirectional_orientation-'+key] = self.max_roughness_dir_x2[key]
 
-            dfs['MinDR'+key] = self.min_roughness[key]
-            dfs['MinDR_Direction'+key] = self.min_roughness_dir[key]
-            dfs['Min2DR'+key] = self.min_roughness_x2[key]
-            dfs['Min2DR_Direction'+key] = self.min_roughness_dir_x2[key]
+            dfs['min_unidirectional_magnitude-'+key] = self.min_roughness[key]
+            dfs['min_unidirectional_orientation-'+key] = self.min_roughness_dir[key]
+            dfs['min_bidirectional_magnitude-'+key] = self.min_roughness_x2[key]
+            dfs['min_bidirectional_orientation-'+key] = self.min_roughness_dir_x2[key]
+
+            dfs['minperp_unidirectional_magnitude-'+key] = self.minperp_roughness[key]
+            dfs['minperp_unidirectional_orientation-'+key] = self.minperp_roughness_dir[key]
+            dfs['minperp_bidirectional_magnitude-'+key] = self.minperp_roughness_x2[key]
+            dfs['minperp_bidirectional_orientation-'+key] = self.minperp_roughness_dir_x2[key]
+
         dfs.to_csv(*args,**kwargs)
-    
+
+    def print_directional_roughness(self,file_prefix:str,metric:str,**fig_kwargs):
+        with PdfPages(f"{file_prefix}_{metric.replace('*','star')}.pdf") as pdf:
+            print(f"Writing plots to {file_prefix}_{metric.replace('*','star')}.pdf")
+            fig,ax = plt.subplots(subplot_kw={"projection":"polar"},**fig_kwargs)
+            fig.tight_layout()
+            for data in tqdm(self.roughness_data[metric]):
+                
+                ax.plot(self.az,data)
+                pdf.savefig(fig)
+                ax.clear()
+
     def to_vtk(self,file_prefix:str,metric:str):
-        """Create VTK files containing the roughness magnitudes and directions
-
-        :param file_prefix: Initial part of file name that will be appended based on VTK output type
-        :type file_prefix: str
-        :param metric: Metric name to be output to VTK
-        :type metric: str
-        """
-        # interpolate data by triangle centroid
-        centroids = np.mean(self.surface.points[self.surface.triangles,:2],axis=1)
-        roughness_data_vtk = {}
-        for key,val in self.magopts.items():
-            roughness_data_vtk[key] = griddata(self.samples,val[metric],centroids).astype(np.float32)
+        centroids = np.mean(self.surface.original_points[self.surface.triangles],axis=1)
         
-        for az, col in zip(self.az,range(self.roughness_data[metric].shape[1])):
-            roughness_data_vtk[f"DR_{np.degrees(az):03.1f}"] = griddata(self.samples,self.roughness_data[metric][:,col],centroids).astype(np.float32)
+        # Determine points affected by edge
+        self.surface._calculate_edges()
+        bounds = self.surface.edge_bounds
+        mask = np.ones([centroids.shape[0]])
+        #https://stackoverflow.com/questions/849211/shortest-distance-between-a-point-and-a-line-segment/4165840?
+        for b_i in range(bounds.shape[0]):
+            p1 = bounds[b_i-1]
+            p2 = bounds[b_i]
 
-        for az, col in zip(self.az[:self.roughness_data_x2[metric].shape[1]],range(self.roughness_data_x2[metric].shape[1])):
-            roughness_data_vtk[f"2DR_{np.degrees(az):03.1f}"] = griddata(self.samples,self.roughness_data_x2[metric][:,col],centroids).astype(np.float32)
+            ab = centroids-p1
+            cd = p2 - p1
+            lensq = np.sum(cd**2)
+            param = np.tensordot(ab,cd,axes=1)/lensq if lensq != 0 else -1
+            xx = 0
+            xx = np.zeros([param.shape[0],2])
+            xx = param[:,np.newaxis] * cd + p1
+            xx[param < 0] = p1
+            xx[param > 1] = p2
 
-        x = self.surface.points[:,0]
-        y = self.surface.points[:,1]
-        z = self.surface.points[:,2]
+            distances = np.linalg.norm(centroids-xx,axis=1)
+            mask[distances < self.sample_window.radius] = 0
+        
+        roughness_data_vtk = {}
+        print("Writing magnitude data")
+        for key,val in tqdm(self.magopts.items()):
+            roughness_data_vtk[key] = [griddata(self.samples,val[metric],centroids[:,:2]).astype(np.float32)]
+            # roughness_data_vtk[key] = roughness_data_vtk[key].tolist()
+        
+        
+        for az, col in tqdm(zip(self.az,range(self.roughness_data[metric].shape[1]))):
+            roughness_data_vtk[f"DR_{np.degrees(az):03.1f}"] = [griddata(self.samples,self.roughness_data[metric][:,col],centroids[:,:2]).astype(np.float32)]
+            # roughness_data_vtk[f"DR_{np.degrees(az):03.1f}"] = roughness_data_vtk[f"DR_{np.degrees(az):03.1f}"].tolist()
 
-        conn = self.surface.triangles.flatten()
-        offset = np.arange(3,(self.surface.triangles.shape[0]+1)*3,3).astype(np.float)
+        for az, col in tqdm(zip(self.az[:self.roughness_data_x2[metric].shape[1]],range(self.roughness_data_x2[metric].shape[1]))):
+            roughness_data_vtk[f"2DR_{np.degrees(az):03.1f}"] = [griddata(self.samples,self.roughness_data_x2[metric][:,col],centroids[:,:2]).astype(np.float32)]
+            # roughness_data_vtk[f"2DR_{np.degrees(az):03.1f}"] = roughness_data_vtk[f"2DR_{np.degrees(az):03.1f}"].tolist()
 
-        ctype = np.ones(self.surface.triangles.shape[0]) * VtkTriangle.tid
+        roughness_data_vtk['edge_mask'] = [mask]
+        
+        points = self.surface.original_points.astype(np.float32)
+        cells = [("triangle",self.surface.triangles.astype(np.int32))]
+        magnitude_mesh = meshio.Mesh(
+            points,cells,
+            cell_data=roughness_data_vtk)
+        magnitude_mesh.write(f"{file_prefix}_magnitude.vtu",compression='lzma')
 
-        unstructuredGridToVTK(
-            f"{file_prefix}_magnitude",x,y,z,
-            connectivity=conn,offsets=offset,cell_types=ctype,cellData=roughness_data_vtk)
-
-        # Generate direction vector file
-        x = np.ascontiguousarray(centroids[:,0])
-        y = np.ascontiguousarray(centroids[:,1])
-        z = griddata(self.surface.points[:,:2],self.surface.points[:,2],centroids)
-        conn = np.arange(x.shape[0])
-        offset = conn.astype(np.int64)+1
-        ctype = np.ones(conn.shape[0],dtype=np.int64)*VtkVertex.tid
-        normals = self.surface.normals
-
+        print("Writing directional data")
+        centroids = np.mean(self.surface.original_points[self.surface.triangles],axis=1)
+        normals = self.surface.original_normals
         def generate_vtkdir_data(raw_dir_data,magnitudes):
             dir = raw_dir_data
             dir = np.hstack([np.cos(dir[:,np.newaxis]),np.sin(dir[:,np.newaxis])])
-            vtk_dir = griddata(self.samples,dir,centroids)
-            vtk_mag = griddata(self.samples,magnitudes,centroids)
+            vtk_dir = griddata(self.samples,dir,centroids[:,:2])
+            vtk_mag = griddata(self.samples,magnitudes,centroids[:,:2])
             vtk_dir /= np.linalg.norm(vtk_dir,axis=1)[:,np.newaxis]
             vtk_dir = np.hstack([vtk_dir,np.zeros([vtk_dir.shape[0],1])])
             vtk_perp = np.vstack([-vtk_dir[:,1],vtk_dir[:,0],vtk_dir[:,2]]).T
             vtk_dir = np.cross(vtk_perp,normals)*vtk_mag[:,np.newaxis]
             
-            vtk_dir = np.ascontiguousarray(vtk_dir[:,0]),np.ascontiguousarray(vtk_dir[:,1]),np.ascontiguousarray(vtk_dir[:,2])
-            return vtk_dir
+            # vtk_dir = np.ascontiguousarray(vtk_dir[:,0].astype(np.float32)),np.ascontiguousarray(vtk_dir[:,1].astype(np.float32)),np.ascontiguousarray(vtk_dir[:,2].astype(np.float32))
+            return [vtk_dir]
         dir_data = {}
         dir_data['min_unidirectional'] = generate_vtkdir_data(self.min_roughness_dir[metric],self.min_roughness[metric])
         dir_data['max_unidirectional'] = generate_vtkdir_data(self.max_roughness_dir[metric],self.max_roughness[metric])
+        dir_data['minperp_unidirectional'] = generate_vtkdir_data(self.min_roughness_dir[metric]+np.pi/2,self.min_roughness[metric])
         dir_data['min_bidirectional'] = generate_vtkdir_data(self.min_roughness_dir_x2[metric],self.min_roughness_x2[metric])
         dir_data['max_bidirectional'] = generate_vtkdir_data(self.max_roughness_dir_x2[metric],self.max_roughness_x2[metric])
-
-        pointsToVTK(
-            f"{file_prefix}_directions",x,y,z,
-            data=dir_data
-        )
+        dir_data['minperp_bidirectional'] = generate_vtkdir_data(self.min_roughness_dir_x2[metric]+np.pi/2,self.min_roughness_x2[metric])
+        dir_data['edge_mask'] = [mask]
+        dir_mesh = meshio.Mesh(
+            centroids,[('vertex',np.arange(centroids.shape[0],dtype=np.int32)[:,np.newaxis])],
+            cell_data=dir_data)
+        dir_mesh.write(f"{file_prefix}_directions.vtu",compression='lzma')
