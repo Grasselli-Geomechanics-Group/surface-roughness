@@ -1,3 +1,4 @@
+from collections import deque
 
 from meshio import read
 import numpy as np
@@ -23,7 +24,7 @@ class Surface:
     """This class loads a surface for surface roughness analysis.
     
     """
-    def __init__(self,path=None,mesh=None,preprocess=True,verbose=True) -> None:
+    def __init__(self,path=None,mesh=None,preprocess=True,verbose=True,calculate_edges=False) -> None:
         super().__init__()
         self.verbose = verbose
         self._mesh = mesh
@@ -45,7 +46,8 @@ class Surface:
         self._meandip = None
 
         self._roughness_map = None
-        
+        self.calculate_edges = calculate_edges 
+        self.edge_bounds = None      
         if preprocess:
             self.preprocess()
         if verbose:
@@ -85,7 +87,49 @@ class Surface:
         if self.verbose:
             print("Calculating areas...")
         self._calculate_areas()
+        if self.calculate_edges:
+            if self.verbose:
+                print("Calculating edge bounds")
+            self._calculate_edges()
 
+    def _calculate_edges(self):
+        if self.edge_bounds is None:
+            def h(edge):
+                return tuple(sorted(edge))
+            edge_count = {}
+            def add_edge(edge):
+                if h(edge) not in edge_count:
+                    edge_count[h(edge)] = 1
+                else:
+                    del edge_count[h(edge)]
+            for triangle in self.triangles:
+                add_edge(triangle[:2])
+                add_edge(triangle[1:3])
+                add_edge(np.array([triangle[2],triangle[0]]))
+
+            edges = []
+            edges = [[edge0,edge1] for edge0,edge1 in edge_count.keys()]
+
+            polygon_loop = [edges[0]]
+            del edges[0]
+            current_loop = polygon_loop[0]
+            while len(edges) > 0:
+                for i,edge in enumerate(edges):
+                    if edge[0] == current_loop[-1]:
+                        current_loop.append(edge[1])
+                        break
+                    elif edge[1] == current_loop[-1]:
+                        current_loop.append(edge[0])
+                        break
+                if i < len(edges):
+                    del edges[i]
+                else:
+                    polygon_loop.append(edges[0])
+                    current_loop = polygon_loop[-1]
+            self.polygon_loop = sorted(polygon_loop,key=lambda x: len(x))[-1]
+            del self.polygon_loop[-1]
+            self.edge_bounds = np.vstack([self.points[index] for index in polygon_loop])
+    
     @property
     def area(self):
         return np.sum(self._areas)

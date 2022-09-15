@@ -66,8 +66,7 @@ setup(
         'numpy',
         'numexpr',
         'pandas',
-        'matplotlib',
-        'pyevtk'
+        'matplotlib'
     ],
     cmdclass={"build_ext":build_ext},
     zip_safe=False,

@@ -1,18 +1,14 @@
-from fileinput import filename
 from itertools import compress
 import os
 from typing import Union
-import zlib, base64
 
 import numpy as np
 import numexpr as ne
 from pandas import DataFrame, concat
 from tqdm import tqdm
-from tqdm.contrib import tmap, tenumerate
+from tqdm.contrib import tenumerate
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
-from pyevtk.hl import unstructuredGridToVTK, pointsToVTK
-from pyevtk.vtk import VtkTriangle,VtkVertex
 
 import meshio
 
@@ -513,10 +509,32 @@ class RoughnessMap:
                 ax.plot(self.az,data)
                 pdf.savefig(fig)
                 ax.clear()
-                
 
     def to_vtk(self,file_prefix:str,metric:str):
         centroids = np.mean(self.surface.original_points[self.surface.triangles],axis=1)
+        
+        # Determine points affected by edge
+        self.surface._calculate_edges()
+        bounds = self.surface.edge_bounds
+        mask = np.ones([centroids.shape[0]])
+        #https://stackoverflow.com/questions/849211/shortest-distance-between-a-point-and-a-line-segment/4165840?
+        for b_i in range(bounds.shape[0]):
+            p1 = bounds[b_i-1]
+            p2 = bounds[b_i]
+
+            ab = centroids-p1
+            cd = p2 - p1
+            lensq = np.sum(cd**2)
+            param = np.tensordot(ab,cd,axes=1)/lensq if lensq != 0 else -1
+            xx = 0
+            xx = np.zeros([param.shape[0],2])
+            xx = param[:,np.newaxis] * cd + p1
+            xx[param < 0] = p1
+            xx[param > 1] = p2
+
+            distances = np.linalg.norm(centroids-xx,axis=1)
+            mask[distances < self.sample_window.radius] = 0
+        
         roughness_data_vtk = {}
         print("Writing magnitude data")
         for key,val in tqdm(self.magopts.items()):
@@ -532,6 +550,7 @@ class RoughnessMap:
             roughness_data_vtk[f"2DR_{np.degrees(az):03.1f}"] = [griddata(self.samples,self.roughness_data_x2[metric][:,col],centroids[:,:2]).astype(np.float32)]
             # roughness_data_vtk[f"2DR_{np.degrees(az):03.1f}"] = roughness_data_vtk[f"2DR_{np.degrees(az):03.1f}"].tolist()
 
+        roughness_data_vtk['edge_mask'] = [mask]
         
         points = self.surface.original_points.astype(np.float32)
         cells = [("triangle",self.surface.triangles.astype(np.int32))]
@@ -562,78 +581,8 @@ class RoughnessMap:
         dir_data['min_bidirectional'] = generate_vtkdir_data(self.min_roughness_dir_x2[metric],self.min_roughness_x2[metric])
         dir_data['max_bidirectional'] = generate_vtkdir_data(self.max_roughness_dir_x2[metric],self.max_roughness_x2[metric])
         dir_data['minperp_bidirectional'] = generate_vtkdir_data(self.min_roughness_dir_x2[metric]+np.pi/2,self.min_roughness_x2[metric])
+        dir_data['edge_mask'] = [mask]
         dir_mesh = meshio.Mesh(
             centroids,[('vertex',np.arange(centroids.shape[0],dtype=np.int32)[:,np.newaxis])],
             cell_data=dir_data)
         dir_mesh.write(f"{file_prefix}_directions.vtu",compression='lzma')
-
-    def _to_vtk(self,file_prefix:str,metric:str):
-        """Create VTK files containing the roughness magnitudes and directions
-
-        :param file_prefix: Initial part of file name that will be appended based on VTK output type
-        :type file_prefix: str
-        :param metric: Metric name to be output to VTK
-        :type metric: str
-        """
-        # interpolate data by triangle centroid
-        centroids = np.mean(self.surface.original_points[self.surface.triangles],axis=1)
-        roughness_data_vtk = {}
-        for key,val in self.magopts.items():
-            roughness_data_vtk[key] = griddata(self.samples,val[metric],centroids[:,:2]).astype(np.float32)
-        
-        for az, col in zip(self.az,range(self.roughness_data[metric].shape[1])):
-            roughness_data_vtk[f"DR_{np.degrees(az):03.1f}"] = griddata(self.samples,self.roughness_data[metric][:,col],centroids[:,:2]).astype(np.float32)
-
-        for az, col in zip(self.az[:self.roughness_data_x2[metric].shape[1]],range(self.roughness_data_x2[metric].shape[1])):
-            roughness_data_vtk[f"2DR_{np.degrees(az):03.1f}"] = griddata(self.samples,self.roughness_data_x2[metric][:,col],centroids[:,:2]).astype(np.float32)
-
-        x = np.ascontiguousarray(self.surface.original_points[:,0].astype(np.float32))
-        y = np.ascontiguousarray(self.surface.original_points[:,1].astype(np.float32))
-        z = np.ascontiguousarray(self.surface.original_points[:,2].astype(np.float32))
-
-        conn = np.ascontiguousarray(self.surface.triangles.flatten()).astype(np.int32)
-        offset = np.arange(3,(self.surface.triangles.shape[0]+1)*3,3).astype(np.int32)
-
-        ctype = np.ones(self.surface.triangles.shape[0],dtype=np.int32) * VtkTriangle.tid
-
-        # unstructuredGridToVTK(
-        RoughnessMap.unstructuredGridWriter(
-            f"{file_prefix}_magnitude",x,y,z,
-            connectivity=conn,offsets=offset,cell_types=ctype,cellData=roughness_data_vtk)
-
-        # Generate direction vector file
-        x = np.ascontiguousarray(centroids[:,0].astype(np.float32))
-        y = np.ascontiguousarray(centroids[:,1].astype(np.float32))
-        z = np.ascontiguousarray(centroids[:,2].astype(np.float32))
-        # z = griddata(self.surface.original_points[:,:2],self.surface.original_points[:,2],centroids[:,:2]).astype(x.dtype)
-        # z = np.ascontiguousarray(z)
-        conn = np.arange(x.shape[0]).astype(np.int32)
-        offset = (conn+1).astype(np.int32)
-        ctype = np.ones(conn.shape[0],dtype=np.int8)*VtkVertex.tid
-        normals = self.surface.original_normals
-
-        def generate_vtkdir_data(raw_dir_data,magnitudes):
-            dir = raw_dir_data
-            dir = np.hstack([np.cos(dir[:,np.newaxis]),np.sin(dir[:,np.newaxis])])
-            vtk_dir = griddata(self.samples,dir,centroids[:,:2])
-            vtk_mag = griddata(self.samples,magnitudes,centroids[:,:2])
-            vtk_dir /= np.linalg.norm(vtk_dir,axis=1)[:,np.newaxis]
-            vtk_dir = np.hstack([vtk_dir,np.zeros([vtk_dir.shape[0],1])])
-            vtk_perp = np.vstack([-vtk_dir[:,1],vtk_dir[:,0],vtk_dir[:,2]]).T
-            vtk_dir = np.cross(vtk_perp,normals)*vtk_mag[:,np.newaxis]
-            
-            vtk_dir = np.ascontiguousarray(vtk_dir[:,0].astype(np.float32)),np.ascontiguousarray(vtk_dir[:,1].astype(np.float32)),np.ascontiguousarray(vtk_dir[:,2].astype(np.float32))
-            return vtk_dir
-        dir_data = {}
-        dir_data['min_unidirectional'] = generate_vtkdir_data(self.min_roughness_dir[metric],self.min_roughness[metric])
-        dir_data['max_unidirectional'] = generate_vtkdir_data(self.max_roughness_dir[metric],self.max_roughness[metric])
-        dir_data['minperp_unidirectional'] = generate_vtkdir_data(self.min_roughness_dir[metric]+np.pi/2,self.min_roughness[metric])
-        dir_data['min_bidirectional'] = generate_vtkdir_data(self.min_roughness_dir_x2[metric],self.min_roughness_x2[metric])
-        dir_data['max_bidirectional'] = generate_vtkdir_data(self.max_roughness_dir_x2[metric],self.max_roughness_x2[metric])
-        dir_data['minperp_bidirectional'] = generate_vtkdir_data(self.min_roughness_dir_x2[metric]+np.pi/2,self.min_roughness_x2[metric])
-
-        # pointsToVTK(
-        RoughnessMap.pointWriter(
-            f"{file_prefix}_directions",x,y,z,
-            data=dir_data
-        )
