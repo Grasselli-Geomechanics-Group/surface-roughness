@@ -10,14 +10,15 @@ w = SampleWindow(is_circle=True,radius=2.5)
 # files = glob.glob("X:/20220113_surface_sampling_samples/Hydrostone_BD_results/BD_31/*.stl")
 # files = glob.glob("X:/20220113_surface_sampling_samples/*.stl")
 # files = glob.glob("X:/20220113_surface_sampling_samples/Hydrostone_BD_results/*.stl")
-files = glob.glob("X:/20220113_surface_sampling_samples/MontneyCCNBD2018/*.stl")
-files.extend(glob.glob("X:/20220113_surface_sampling_samples/Hydrostone_BD_results/BD_31/*.stl"))
-files.extend(glob.glob("X:/20220113_surface_sampling_samples/PLT/*.stl"))
-files.extend(glob.glob("X:/20220113_surface_sampling_samples/20220718_EM_alberta_roadcut_sample_1_1_s*.stl"))
+# files = glob.glob("X:/20220113_surface_sampling_samples/MontneyCCNBD2018/*.stl")
+# files.extend(glob.glob("X:/20220113_surface_sampling_samples/Hydrostone_BD_results/BD_31/*.stl"))
+# files.extend(glob.glob("X:/20220113_surface_sampling_samples/PLT/*.stl"))
+# files.extend(glob.glob("X:/20220113_surface_sampling_samples/20220718_EM_alberta_roadcut_sample_1_1_s*.stl"))
 # files = glob.glob("X:/20220113_surface_sampling_samples/PLT/*.stl")
-# files = glob.glob("X:/20220113_surface_sampling_samples/20220718_EM_alberta_roadcut_sample_1_1_s*.stl")
-
-def generate_map(surface,method,submethods,w:SampleWindow):
+files = glob.glob("X:/20220113_surface_sampling_samples/roadcut_results/*.stl")
+ 
+def generate_map(surface,method,submethods,w:
+    SampleWindow):
     map = roughness_map(surface,method,w,1,1)
     map.sample(verbose=True)
     map.evaluate()
@@ -35,6 +36,7 @@ def generate_map(surface,method,submethods,w:SampleWindow):
         map.to_vtk(f'{file}_{submethod_savestr}_r{w.radius}',submethod)
         map.to_csv(f'{file}_{submethod_savestr}_r{w.radius}.csv')
         map.print_directional_roughness(file,submethod)
+
 for file in files:
     # if os.path.exists(f'{file}_delta_t_r2.5_directions.vtu'):
         # continue
