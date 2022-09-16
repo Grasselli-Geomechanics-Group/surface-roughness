@@ -426,18 +426,17 @@ class RoughnessMap:
         ax.bar(theta,radii,width=width,bottom=0.0)
 
     def plot_magnitude(self,metric:str,stat:str,n_colours=50,colorbar_label=None,ax=None,**fig_kwargs):
-        """Plots the magnitude of requested roughness data
+        """Plots the magnitude of requested roughness data.
 
-        :param metric: Roughness metric used for plotting
-        :type metric: str
-        :param stat: Statistic option from RoughnessMap.diropts.keys()
-        :type stat: str
-        :param colorbar_label: Colorbar label, defaults to None
-        :type colorbar_label: str, optional
-        :return: matplotlib.pyplot.subplots figure handle
-        :rtype: Figure
-        :return: matplotlib.pyplot.subplots axes handle
-        :rtype: axes.Axes
+        Args:
+            metric (str): Roughness metric used for plotting
+            stat (str):Statistic option from RoughnessMap.diropts.keys()
+            n_colours (int, optional): Number of colours to use for the colorbar label. Defaults to 50.
+            colorbar_label (colorbar_label, optional): Colorbar label. Defaults to None.
+            ax (axes.Axes, optional): Plot on an existing axis instead of creating a new figure. Defaults to None.
+        
+        Returns:
+            Matplotlib figure and axes
         """
         if ax is None:
             fig,ax = plt.subplots(**fig_kwargs)
@@ -517,23 +516,24 @@ class RoughnessMap:
         self.surface._calculate_edges()
         bounds = self.surface.edge_bounds
         mask = np.ones([centroids.shape[0]])
-        #https://stackoverflow.com/questions/849211/shortest-distance-between-a-point-and-a-line-segment/4165840?
-        for b_i in range(bounds.shape[0]):
-            p1 = bounds[b_i-1]
-            p2 = bounds[b_i]
+        for bound in bounds:
+            #https://stackoverflow.com/questions/849211/shortest-distance-between-a-point-and-a-line-segment/4165840?
+            for b_i in range(bound.shape[0]):
+                p1 = bound[b_i-1]
+                p2 = bound[b_i]
 
-            ab = centroids-p1
-            cd = p2 - p1
-            lensq = np.sum(cd**2)
-            param = np.tensordot(ab,cd,axes=1)/lensq if lensq != 0 else -1
-            xx = 0
-            xx = np.zeros([param.shape[0],2])
-            xx = param[:,np.newaxis] * cd + p1
-            xx[param < 0] = p1
-            xx[param > 1] = p2
+                ab = centroids-p1
+                cd = p2 - p1
+                lensq = np.sum(cd**2)
+                param = np.tensordot(ab,cd,axes=1)/(lensq if lensq != 0 else -1)
+                xx = 0
+                xx = np.zeros([param.shape[0],2])
+                xx = param[:,np.newaxis] * cd + p1
+                xx[param < 0] = p1
+                xx[param > 1] = p2
 
-            distances = np.linalg.norm(centroids-xx,axis=1)
-            mask[distances < self.sample_window.radius] = 0
+                distances = np.linalg.norm(centroids-xx,axis=1)
+                mask[distances < self.sample_window.radius] = 0
         
         roughness_data_vtk = {}
         print("Writing magnitude data")

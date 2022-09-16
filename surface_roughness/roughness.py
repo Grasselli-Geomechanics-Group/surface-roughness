@@ -1,5 +1,6 @@
 from collections import deque
 
+
 from meshio import read
 import numpy as np
 import pandas as pd
@@ -8,7 +9,7 @@ from scipy.spatial.transform import Rotation
 from scipy.stats import gaussian_kde
 from scipy.spatial import ConvexHull
 
-from .roughness_impl import (
+from surface_roughness.roughness_impl import (
     _rs,
     _cppDirectionalRoughness,
     _PyDirectionalRoughness,
@@ -19,6 +20,7 @@ from .roughness_impl import (
     _cppMeanDipRoughness
 )
 
+from surface_roughness._geometry_utils import create_event_list, point_in_polygon, segments_intersecting,loop_points,original_segments_intersecting
 
 class Surface:
     """This class loads a surface for surface roughness analysis.
@@ -110,9 +112,10 @@ class Surface:
             edges = []
             edges = [[edge0,edge1] for edge0,edge1 in edge_count.keys()]
 
-            polygon_loop = [edges[0]]
+            polygon_loop = []
+            
+            current_loop = deque(edges[0])
             del edges[0]
-            current_loop = polygon_loop[0]
             while len(edges) > 0:
                 for i,edge in enumerate(edges):
                     if edge[0] == current_loop[-1]:
@@ -121,14 +124,40 @@ class Surface:
                     elif edge[1] == current_loop[-1]:
                         current_loop.append(edge[0])
                         break
-                if i < len(edges):
+                    elif edge[0] == current_loop[0]:
+                        current_loop.appendleft(edge[1])
+                        break
+                    elif edge[1] == current_loop[0]:
+                        current_loop.appendleft(edge[0])
+                        break
+                if i < len(edges)-1:
                     del edges[i]
                 else:
-                    polygon_loop.append(edges[0])
-                    current_loop = polygon_loop[-1]
-            self.polygon_loop = sorted(polygon_loop,key=lambda x: len(x))[-1]
-            del self.polygon_loop[-1]
-            self.edge_bounds = np.vstack([self.points[index] for index in polygon_loop])
+                    polygon_loop.append(current_loop)
+                    current_loop = deque(edges[0])
+                    del edges[0]
+            self.polygon_loop = sorted(polygon_loop,key=lambda x: len(x),reverse=True)
+
+            current_loop = 0
+            while current_loop != len(self.polygon_loop)-1:
+                for l_i,loop in enumerate(self.polygon_loop[current_loop+1:],1):
+                    small_poly_segments = create_event_list(loop,self.points)
+                    for big_loop in self.polygon_loop[:current_loop+1]:
+                        big_poly_segments = create_event_list(big_loop,self.points)
+                        if not segments_intersecting(big_poly_segments,small_poly_segments):
+                            if point_in_polygon(
+                                self.points[loop[0]],
+                                loop_points(self.polygon_loop[current_loop],self.points)):
+                                del self.polygon_loop[l_i]
+                                break
+                            else:
+                                # new polygon
+                                current_loop += 1
+
+            self.edge_bounds = [
+                np.vstack([self.points[index] for index in list(polygon_loop)[:-1]])
+                for polygon_loop in self.polygon_loop
+            ]
     
     @property
     def area(self):
