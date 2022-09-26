@@ -96,6 +96,8 @@ class Surface:
 
     def _calculate_edges(self):
         if self.edge_bounds is None:
+            if self.verbose:
+                print("Calculating edges")
             def h(edge):
                 return tuple(sorted(edge))
             edge_count = {}
@@ -113,7 +115,8 @@ class Surface:
             edges = [[edge0,edge1] for edge0,edge1 in edge_count.keys()]
 
             polygon_loop = []
-            
+            if self.verbose:
+                print("Constructing polygon loop")
             current_loop = deque(edges[0])
             del edges[0]
             while len(edges) > 0:
@@ -137,7 +140,8 @@ class Surface:
                     current_loop = deque(edges[0])
                     del edges[0]
             self.polygon_loop = sorted(polygon_loop,key=lambda x: len(x),reverse=True)
-
+            if self.verbose:
+                print("Orienting polygon loops")
             current_loop = 0
             while current_loop != len(self.polygon_loop)-1:
                 for l_i,loop in enumerate(self.polygon_loop[current_loop+1:],1):

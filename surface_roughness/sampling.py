@@ -5,7 +5,7 @@ from typing import Union
 import numpy as np
 import numexpr as ne
 from pandas import DataFrame, concat
-from tqdm import tqdm
+from tqdm import tqdm, trange
 from tqdm.contrib import tenumerate
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
@@ -28,7 +28,8 @@ from .roughness_impl import (
     DirRoughnessBase
 )
 
-from .roughness import Surface
+from surface_roughness.roughness import Surface
+from surface_roughness._geometry_utils import points_in_polygon
 
 
 class SampleWindow:
@@ -509,32 +510,44 @@ class RoughnessMap:
                 pdf.savefig(fig)
                 ax.clear()
 
-    def to_vtk(self,file_prefix:str,metric:str):
+    def to_vtk(self,file_prefix:str,metric:str,find_edges=False):
+        print(f"Writing to {file_prefix}_magnitude.vtu and {file_prefix}_directions.vtu")
         centroids = np.mean(self.surface.original_points[self.surface.triangles],axis=1)
         
-        # Determine points affected by edge
-        self.surface._calculate_edges()
-        bounds = self.surface.edge_bounds
-        mask = np.ones([centroids.shape[0]])
-        for bound in bounds:
-            #https://stackoverflow.com/questions/849211/shortest-distance-between-a-point-and-a-line-segment/4165840?
-            for b_i in range(bound.shape[0]):
-                p1 = bound[b_i-1]
-                p2 = bound[b_i]
+        if find_edges:
+            # Determine points affected by edge
+            self.surface._calculate_edges()
+            bounds = self.surface.edge_bounds
+            mask = np.zeros([centroids.shape[0]],dtype=np.uint8)
+            for i,bound in enumerate(bounds):
+                print(f"Calculating centroids within {self.sample_window.radius} of internal bounds {i}")
+                #https://stackoverflow.com/questions/849211/shortest-distance-between-a-point-and-a-line-segment/4165840?
+                # bounded_centroids_idx = np.where(np.array([point_in_polygon(p,bound) for p in centroids]))
+                bounded_centroids_idx = np.where(points_in_polygon(centroids,bound))[0]
+                picked_centroids_idx = np.zeros([0],dtype=int)
+                
+                for b_i in trange(bound.shape[0]):
+                    filtered_centroids = centroids[bounded_centroids_idx]
+                    filtered_mask = np.zeros([bounded_centroids_idx.shape[0]],dtype=np.bool_)
+                    p1 = bound[b_i-1]
+                    p2 = bound[b_i]
 
-                ab = centroids-p1
-                cd = p2 - p1
-                lensq = np.sum(cd**2)
-                param = np.tensordot(ab,cd,axes=1)/(lensq if lensq != 0 else -1)
-                xx = 0
-                xx = np.zeros([param.shape[0],2])
-                xx = param[:,np.newaxis] * cd + p1
-                xx[param < 0] = p1
-                xx[param > 1] = p2
+                    ab = filtered_centroids-p1
+                    cd = p2 - p1
+                    lensq = np.sum(cd**2)
+                    param = np.tensordot(ab,cd,axes=1)/(lensq if lensq != 0 else -1)
+                    xx = param[:,np.newaxis] * cd + p1
+                    xx[param < 0] = p1
+                    xx[param > 1] = p2
 
-                distances = np.linalg.norm(centroids-xx,axis=1)
-                mask[distances < self.sample_window.radius] = 0
-        
+                    distances = np.linalg.norm(filtered_centroids-xx,axis=1)
+                    filtered_mask[distances < self.sample_window.radius] = True
+                    
+                    picked_centroids_idx = np.hstack([picked_centroids_idx,bounded_centroids_idx[filtered_mask]])
+                    bounded_centroids_idx = np.delete(bounded_centroids_idx,filtered_mask)
+                
+                mask[picked_centroids_idx] = 1
+                
         roughness_data_vtk = {}
         print("Writing magnitude data")
         for key,val in tqdm(self.magopts.items()):
@@ -550,7 +563,8 @@ class RoughnessMap:
             roughness_data_vtk[f"2DR_{np.degrees(az):03.1f}"] = [griddata(self.samples,self.roughness_data_x2[metric][:,col],centroids[:,:2]).astype(np.float32)]
             # roughness_data_vtk[f"2DR_{np.degrees(az):03.1f}"] = roughness_data_vtk[f"2DR_{np.degrees(az):03.1f}"].tolist()
 
-        roughness_data_vtk['edge_mask'] = [mask]
+        if find_edges:
+            roughness_data_vtk['edge_mask'] = [mask]
         
         points = self.surface.original_points.astype(np.float32)
         cells = [("triangle",self.surface.triangles.astype(np.int32))]
@@ -558,7 +572,6 @@ class RoughnessMap:
             points,cells,
             cell_data=roughness_data_vtk)
         magnitude_mesh.write(f"{file_prefix}_magnitude.vtu",compression='lzma')
-
         print("Writing directional data")
         centroids = np.mean(self.surface.original_points[self.surface.triangles],axis=1)
         normals = self.surface.original_normals
@@ -581,7 +594,8 @@ class RoughnessMap:
         dir_data['min_bidirectional'] = generate_vtkdir_data(self.min_roughness_dir_x2[metric],self.min_roughness_x2[metric])
         dir_data['max_bidirectional'] = generate_vtkdir_data(self.max_roughness_dir_x2[metric],self.max_roughness_x2[metric])
         dir_data['minperp_bidirectional'] = generate_vtkdir_data(self.min_roughness_dir_x2[metric]+np.pi/2,self.min_roughness_x2[metric])
-        dir_data['edge_mask'] = [mask]
+        if find_edges:
+            dir_data['edge_mask'] = [mask]
         dir_mesh = meshio.Mesh(
             centroids,[('vertex',np.arange(centroids.shape[0],dtype=np.int32)[:,np.newaxis])],
             cell_data=dir_data)
