@@ -20,7 +20,13 @@ from surface_roughness.roughness_impl import (
     _cppMeanDipRoughness
 )
 
-from surface_roughness._geometry_utils import create_event_list, point_in_polygon, segments_intersecting,loop_points,original_segments_intersecting
+from surface_roughness._geometry_utils import (
+    create_event_list, 
+    point_in_polygon, 
+    segments_intersecting,
+    loop_points,
+    original_segments_intersecting
+)
 
 class Surface:
     """This class loads a surface for surface roughness analysis.
@@ -49,7 +55,8 @@ class Surface:
 
         self._roughness_map = None
         self.calculate_edges = calculate_edges 
-        self.edge_bounds = None      
+        self.edge_bounds: np.ndarray = None
+        self.external_edge_bounds: np.ndarray = None  
         if preprocess:
             self.preprocess()
         if verbose:
@@ -75,7 +82,7 @@ class Surface:
 
         return self.points[h.vertices]
 
-    def bounds(self):
+    def bounds(self) -> np.ndarray:
         return np.vstack([self.points.min(axis=0),self.points.max(axis=0)])
     
     def plot(self):
@@ -94,6 +101,18 @@ class Surface:
                 print("Calculating edge bounds")
             self._calculate_edges()
 
+    def _calculate_external_edges(self):
+        if self.external_edge_bounds is None:
+            if self.edge_bounds is None:
+                self._calculate_edges()
+            if self.verbose:
+                print("Calculating external edges")
+            # get left x
+            vertices = np.vstack([poly for poly in self.edge_bounds])
+            mpt = sg.MultiPoint(vertices[:,:2])
+            self.external_edge_bounds = np.array(list(mpt.convex_hull.exterior.coords))
+            
+    
     def _calculate_edges(self):
         if self.edge_bounds is None:
             if self.verbose:
@@ -143,8 +162,15 @@ class Surface:
             if self.verbose:
                 print("Orienting polygon loops")
             current_loop = 0
+            loop_count = 0
+            loop_max = len(self.polygon_loop)
             while current_loop != len(self.polygon_loop)-1:
+                break_loop = False
                 for l_i,loop in enumerate(self.polygon_loop[current_loop+1:],1):
+                    if len(loop) < 3:
+                        del self.polygon_loop[l_i]
+                        break_loop = True
+                        break
                     small_poly_segments = create_event_list(loop,self.points)
                     for big_loop in self.polygon_loop[:current_loop+1]:
                         big_poly_segments = create_event_list(big_loop,self.points)
@@ -153,26 +179,35 @@ class Surface:
                                 self.points[loop[0]],
                                 loop_points(self.polygon_loop[current_loop],self.points)):
                                 del self.polygon_loop[l_i]
+                                break_loop = True
                                 break
                             else:
                                 # new polygon
                                 current_loop += 1
-
+                    if break_loop:
+                        break
+                loop_count += 1
+                if loop_count > loop_max:
+                    break
             self.edge_bounds = [
                 np.vstack([self.points[index] for index in list(polygon_loop)[:-1]])
                 for polygon_loop in self.polygon_loop
             ]
     
     @property
-    def area(self):
+    def area(self) -> float:
         return np.sum(self._areas)
 
     @property
-    def resolution(self):
+    def resolution(self) -> float:
         return np.sqrt(4/np.sqrt(3)*np.mean(self._areas))
 
     @property
-    def B_exp(self):
+    def lengths(self) -> np.ndarray:
+        return np.max(self.points,axis=0) - np.min(self.points,axis=0)
+
+    @property
+    def B_exp(self) -> float:
         return 1.34*self.resolution**0.058
 
     @staticmethod

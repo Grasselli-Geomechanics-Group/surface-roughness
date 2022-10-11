@@ -246,6 +246,8 @@ def points_in_polygon(p:np.ndarray,segments):
             if np.any(np.logical_and(x_check,y_check)):
                 boundary_grids.add((x_i,y_i))
     
+    if len(boundary_grids) < 3:
+        return np.zeros(p.shape[0],dtype=np.bool_)
     # Find grids fully inside boundary grids
     rough_boundaries = np.array([[(x_grid[x_i]+x_grid[x_i+1])/2,(y_grid[y_i]+y_grid[y_i+1])/2] for x_i,y_i in list(boundary_grids)])
 

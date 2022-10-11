@@ -15,16 +15,20 @@ import meshio
 from scipy.stats import gaussian_kde
 from scipy.interpolate import griddata
 
-from .roughness_impl import (
+from surface_roughness.roughness_impl import (
     _rs,
     _cppDirectionalRoughness,
+    _DirectionalRoughness_Evaluator,
     _PyDirectionalRoughness,
     _PyTINBasedRoughness,
     _cppTINBasedRoughness,
     _TINBasedRoughness_Evaluator,
     _cppTINBasedRoughness_againstshear,
+    _TINBasedRoughness_againstshear_Evaluator,
     _cppTINBasedRoughness_bestfit,
+    _TINBasedRoughness_bestfit_Evaluator,
     _cppMeanDipRoughness,
+    _MeanDipRoughness_Evaluator,
     DirRoughnessBase
 )
 
@@ -95,7 +99,13 @@ class RoughnessMap:
     """A class providing utilities to map local roughness of a 3D surface
     """
     def __init__(self,*args,**kwargs):
-        self.surface,self.roughness_method,self.sample_window,self.sample_spacing,self.sample_vertex_inclusion,self.seed_left_offset,self.seed_bot_offset = args
+        self.surface:Surface = args[0]
+        self.roughness_method:str = args[1]
+        self.sample_window:SampleWindow = args[2]
+        self.sample_spacing = args[3]
+        self.sample_vertex_inclusion = args[4]
+        self.seed_left_offset = args[5]
+        self.seed_bot_offset = args[6]
         self.roughness_kwargs = kwargs
         self._methods = {
             'mean_dip':_cppMeanDipRoughness,
@@ -103,6 +113,20 @@ class RoughnessMap:
             'delta_n':_cppTINBasedRoughness_againstshear,
             'delta_a':_cppTINBasedRoughness_bestfit,
             'thetamax_cp1':_cppDirectionalRoughness
+        }
+        self._evaluators = {
+            'mean_dip':_MeanDipRoughness_Evaluator,
+            'delta_t':_TINBasedRoughness_Evaluator,
+            'delta_n':_TINBasedRoughness_againstshear_Evaluator,
+            'delta_a':_TINBasedRoughness_bestfit_Evaluator,
+            'thetamax_cp1':_DirectionalRoughness_Evaluator
+        }
+        self._submethods = {
+            'mean_dip':['mean_dip'],
+            'delta_t':['delta_t','delta*_t'],
+            'delta_n':['delta_n','delta*_n'],
+            'delta_a':['delta_a','delta*_a'],
+            'thetamax_cp1':['']
         }
         if not self.roughness_method in self._methods:
             raise ValueError(f"Roughness method for roughness map must be {self._methods.keys()}")
@@ -513,40 +537,15 @@ class RoughnessMap:
     def to_vtk(self,file_prefix:str,metric:str,find_edges=False):
         print(f"Writing to {file_prefix}_magnitude.vtu and {file_prefix}_directions.vtu")
         centroids = np.mean(self.surface.original_points[self.surface.triangles],axis=1)
+        normals = self.surface.original_normals 
+        
+        centroids = np.mean(self.surface.original_points[self.surface.triangles],axis=1)
         
         if find_edges:
             # Determine points affected by edge
             self.surface._calculate_edges()
             bounds = self.surface.edge_bounds
-            mask = np.zeros([centroids.shape[0]],dtype=np.uint8)
-            for i,bound in enumerate(bounds):
-                print(f"Calculating centroids within {self.sample_window.radius} of internal bounds {i}")
-                #https://stackoverflow.com/questions/849211/shortest-distance-between-a-point-and-a-line-segment/4165840?
-                # bounded_centroids_idx = np.where(np.array([point_in_polygon(p,bound) for p in centroids]))
-                bounded_centroids_idx = np.where(points_in_polygon(centroids,bound))[0]
-                picked_centroids_idx = np.zeros([0],dtype=int)
-                
-                for b_i in trange(bound.shape[0]):
-                    filtered_centroids = centroids[bounded_centroids_idx]
-                    filtered_mask = np.zeros([bounded_centroids_idx.shape[0]],dtype=np.bool_)
-                    p1 = bound[b_i-1]
-                    p2 = bound[b_i]
-
-                    ab = filtered_centroids-p1
-                    cd = p2 - p1
-                    lensq = np.sum(cd**2)
-                    param = np.tensordot(ab,cd,axes=1)/(lensq if lensq != 0 else -1)
-                    xx = param[:,np.newaxis] * cd + p1
-                    xx[param < 0] = p1
-                    xx[param > 1] = p2
-
-                    distances = np.linalg.norm(filtered_centroids-xx,axis=1)
-                    filtered_mask[distances < self.sample_window.radius] = True
-                    
-                    picked_centroids_idx = np.hstack([picked_centroids_idx,bounded_centroids_idx[filtered_mask]])
-                    bounded_centroids_idx = np.delete(bounded_centroids_idx,filtered_mask)
-                
-                mask[picked_centroids_idx] = 1
+            mask = _centroids_in_offset_bounds(centroids,bounds,self.sample_window.radius)
                 
         roughness_data_vtk = {}
         print("Writing magnitude data")
@@ -565,35 +564,28 @@ class RoughnessMap:
 
         if find_edges:
             roughness_data_vtk['edge_mask'] = [mask]
-        
+        roughness_data_vtk['min_unidirectional_dir'] = _generate_vtkdir_data(self.min_roughness_dir[metric],self.min_roughness[metric],centroids,normals,self.samples)
+        roughness_data_vtk['max_unidirectional_dir'] = _generate_vtkdir_data(self.max_roughness_dir[metric],self.max_roughness[metric],centroids,normals,self.samples)
+        roughness_data_vtk['minperp_unidirectional_dir'] = _generate_vtkdir_data(self.min_roughness_dir[metric]+np.pi/2,self.min_roughness[metric],centroids,normals,self.samples)
+        roughness_data_vtk['min_bidirectional_dir'] = _generate_vtkdir_data(self.min_roughness_dir_x2[metric],self.min_roughness_x2[metric],centroids,normals,self.samples)
+        roughness_data_vtk['max_bidirectional_dir'] = _generate_vtkdir_data(self.max_roughness_dir_x2[metric],self.max_roughness_x2[metric],centroids,normals,self.samples)
+        roughness_data_vtk['minperp_bidirectional_dir'] = _generate_vtkdir_data(self.min_roughness_dir_x2[metric]+np.pi/2,self.min_roughness_x2[metric],centroids,normals,self.samples)
         points = self.surface.original_points.astype(np.float32)
         cells = [("triangle",self.surface.triangles.astype(np.int32))]
         magnitude_mesh = meshio.Mesh(
             points,cells,
             cell_data=roughness_data_vtk)
         magnitude_mesh.write(f"{file_prefix}_magnitude.vtu",compression='lzma')
+        
+        
         print("Writing directional data")
-        centroids = np.mean(self.surface.original_points[self.surface.triangles],axis=1)
-        normals = self.surface.original_normals
-        def generate_vtkdir_data(raw_dir_data,magnitudes):
-            dir = raw_dir_data
-            dir = np.hstack([np.cos(dir[:,np.newaxis]),np.sin(dir[:,np.newaxis])])
-            vtk_dir = griddata(self.samples,dir,centroids[:,:2])
-            vtk_mag = griddata(self.samples,magnitudes,centroids[:,:2])
-            vtk_dir /= np.linalg.norm(vtk_dir,axis=1)[:,np.newaxis]
-            vtk_dir = np.hstack([vtk_dir,np.zeros([vtk_dir.shape[0],1])])
-            vtk_perp = np.vstack([-vtk_dir[:,1],vtk_dir[:,0],vtk_dir[:,2]]).T
-            vtk_dir = np.cross(vtk_perp,normals)*vtk_mag[:,np.newaxis]
-            
-            # vtk_dir = np.ascontiguousarray(vtk_dir[:,0].astype(np.float32)),np.ascontiguousarray(vtk_dir[:,1].astype(np.float32)),np.ascontiguousarray(vtk_dir[:,2].astype(np.float32))
-            return [vtk_dir]
         dir_data = {}
-        dir_data['min_unidirectional'] = generate_vtkdir_data(self.min_roughness_dir[metric],self.min_roughness[metric])
-        dir_data['max_unidirectional'] = generate_vtkdir_data(self.max_roughness_dir[metric],self.max_roughness[metric])
-        dir_data['minperp_unidirectional'] = generate_vtkdir_data(self.min_roughness_dir[metric]+np.pi/2,self.min_roughness[metric])
-        dir_data['min_bidirectional'] = generate_vtkdir_data(self.min_roughness_dir_x2[metric],self.min_roughness_x2[metric])
-        dir_data['max_bidirectional'] = generate_vtkdir_data(self.max_roughness_dir_x2[metric],self.max_roughness_x2[metric])
-        dir_data['minperp_bidirectional'] = generate_vtkdir_data(self.min_roughness_dir_x2[metric]+np.pi/2,self.min_roughness_x2[metric])
+        dir_data['min_unidirectional'] = _generate_vtkdir_data(self.min_roughness_dir[metric],self.min_roughness[metric],centroids,normals,self.samples)
+        dir_data['max_unidirectional'] = _generate_vtkdir_data(self.max_roughness_dir[metric],self.max_roughness[metric],centroids,normals,self.samples)
+        dir_data['minperp_unidirectional'] = _generate_vtkdir_data(self.min_roughness_dir[metric]+np.pi/2,self.min_roughness[metric],centroids,normals,self.samples)
+        dir_data['min_bidirectional'] = _generate_vtkdir_data(self.min_roughness_dir_x2[metric],self.min_roughness_x2[metric],centroids,normals,self.samples)
+        dir_data['max_bidirectional'] = _generate_vtkdir_data(self.max_roughness_dir_x2[metric],self.max_roughness_x2[metric],centroids,normals,self.samples)
+        dir_data['minperp_bidirectional'] = _generate_vtkdir_data(self.min_roughness_dir_x2[metric]+np.pi/2,self.min_roughness_x2[metric],centroids,normals,self.samples)
         if find_edges:
             dir_data['edge_mask'] = [mask]
         dir_mesh = meshio.Mesh(
