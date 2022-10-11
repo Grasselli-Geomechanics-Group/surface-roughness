@@ -1,14 +1,15 @@
 from itertools import compress
 import os
 from typing import Union
+from collections import deque
 
 import numpy as np
-import numexpr as ne
 from pandas import DataFrame, concat
-from tqdm import tqdm, trange
+from tqdm import tqdm
 from tqdm.contrib import tenumerate
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
+from matplotlib.backend_bases import MouseButton
 
 import meshio
 
@@ -31,9 +32,18 @@ from surface_roughness.roughness_impl import (
     _MeanDipRoughness_Evaluator,
     DirRoughnessBase
 )
-
 from surface_roughness.roughness import Surface
-from surface_roughness._geometry_utils import points_in_polygon
+from surface_roughness._sampling_utils import (
+    _resample_polyline,
+    _next_point,
+    _comb_vectorfield,
+    _generate_vtkdir_data,
+    _centroids_in_offset_bounds,
+    _triangles_from_p_in_sample,
+    _in_circle,
+    _offset_bounds,
+    _streamline
+)
 
 
 class SampleWindow:
@@ -169,12 +179,7 @@ class RoughnessMap:
             'min_unidirectional':'Min. DR',
             'max_unidirectional':'Max. DR',
             'minperp_unidirectional':'Min. Perp. DR'
-        }
-
-    @staticmethod
-    def _in_circle(x,y,cx,cy,r):
-        # https://stackoverflow.com/questions/59963642/is-there-a-fast-python-algorithm-to-find-all-points-in-a-dataset-which-lie-in-a
-        return ne.evaluate('(x - cx)**2 + (y-cy)**2 < r**2')
+        }   
 
     def _reorient_points(self,samples,verbose):
         iter = tenumerate(list(samples)) if verbose else samples
@@ -187,22 +192,18 @@ class RoughnessMap:
                 rot_mat = Surface._find_rotmatrix_2_z_pos(normal)
                 centroid = p.mean(axis=0)
                 p = (p-centroid) @ rot_mat.T + centroid
-                point_indices = np.where(sample)[0][RoughnessMap._in_circle(p[:,0],p[:,1],self.samples[i,0],self.samples[i,1],self.sample_window.radius)]
+                point_indices = np.where(sample)[0][_in_circle(p[:,0],p[:,1],self.samples[i,0],self.samples[i,1],self.sample_window.radius)]
                 p_in_sample[i] = np.zeros(sample.size,dtype=np.bool_)
                 p_in_sample[i][point_indices] = True
             else:
                 p_in_sample[i] = np.zeros(sample.size,dtype=np.bool_)
         
-        return np.array(p_in_sample)
-    
-    @staticmethod
-    def _triangles_from_p_in_sample(triangles,point_in_sample):
-        return np.all(point_in_sample[triangles],axis=1)
-
+        return np.array(p_in_sample)   
 
     def sample(self,oriented=True,verbose=False):
         """Generate samples based on the sample window and spacing provided
 
+        :param metric:
         :param oriented: Samples points with respect to normal of localized area, defaults to True
         :type oriented: bool, optional
         :param verbose: Enables command line output, defaults to False
@@ -233,7 +234,7 @@ class RoughnessMap:
                 sample_iter = tqdm(self.samples,total=self.samples.shape[0])
             else:
                 sample_iter = self.samples
-            p_in_sample = np.array([RoughnessMap._in_circle(
+            p_in_sample = np.array([_in_circle(
                 self.surface.points[:,0],
                 self.surface.points[:,1],
                 sample[0],
@@ -249,7 +250,7 @@ class RoughnessMap:
                 p_in_sample_iter = tqdm(p_in_sample,total=len(p_in_sample))
             else:
                 p_in_sample_iter = p_in_sample
-            self.t_in_circle = np.array([RoughnessMap._triangles_from_p_in_sample(
+            self.t_in_circle = np.array([_triangles_from_p_in_sample(
                 self.surface.triangles,
                 p
             ) for p in p_in_sample_iter],dtype=np.bool_)
@@ -282,7 +283,7 @@ class RoughnessMap:
                 calc.evaluate(False)
             return calc
         print("Analyzing sampled roughness...")
-        evaluator = _TINBasedRoughness_Evaluator(self.surface.points,self.surface.triangles)
+        evaluator = self._evaluators[self.roughness_method](self.surface.points,self.surface.triangles)
         calculators = evaluator.evaluate(self.t_in_circle)
         self.raw_roughness_calculators = [DirRoughnessBase(impl=impl) for impl in calculators]
         # self.raw_roughness_calculators:list[DirRoughnessBase] = [run_calc(i,tlist) for i,tlist in tqdm(enumerate(self.t_in_circle),total=len(self.t_in_circle))]
@@ -592,3 +593,99 @@ class RoughnessMap:
             centroids,[('vertex',np.arange(centroids.shape[0],dtype=np.int32)[:,np.newaxis])],
             cell_data=dir_data)
         dir_mesh.write(f"{file_prefix}_directions.vtu",compression='lzma')
+
+    def generate_spaced_streamlines(self,roughness_metric,map_type,n_lines):
+        # Using RK4 for streamline
+        sample_positions = deque()
+        
+        bounds = self.surface.bounds()
+        field = self.diropts[map_type][roughness_metric]
+        field = np.hstack([np.cos(field[:,np.newaxis]),np.sin(field[:,np.newaxis])])
+        
+        positions = self.samples
+
+        # orient field to be continuously oriented (comb vectors)
+        field = _comb_vectorfield(positions,field)
+        dt = self.sample_spacing/4
+        self.surface._calculate_external_edges()
+        offset_bounds = _offset_bounds(self.surface.external_edge_bounds.tolist(),self.sample_window.radius)
+        # Pick point 1
+        fig,ax = plt.subplots()
+        ax.quiver(
+            positions[:,0],positions[:,1],
+            field[:,0],field[:,1],
+            # headaxislength=1,headwidth=1,headlength=1
+        )
+        ax.plot(offset_bounds[:,0],offset_bounds[:,1])
+        ax.set_aspect('equal')
+        p1 = np.array(plt.ginput(timeout=-1)[0])
+        ax.plot(p1[0],p1[1],'rx')
+        # Pick poin t2
+        p2 = np.array(plt.ginput(timeout=-1)[0])
+        ax.plot(p2[0],p2[1],'rx')
+        
+        step = (p2 - p1)/(n_lines - 1)
+        starter_positions = np.vstack([
+            np.linspace(p1[0],p2[0],n_lines,endpoint=True),
+            np.linspace(p1[1],p2[1],n_lines,endpoint=True)
+        ]).T
+        # starter_positions = np.vstack([
+        #     np.arange(p1[0],p2[0]+step[0],step[0]),
+        #     np.arange(p1[1],p2[1]+step[1],step[1])]).T
+        samples = []
+        for position in starter_positions:
+            # streamline generate
+            raw_positions = _streamline(
+                positions, field, offset_bounds, 
+                position,np.linalg.norm(self.surface.lengths),dt)
+            raw_positions = np.array(raw_positions)
+            
+            # Resample
+            samples.append(_resample_polyline(raw_positions,self.surface.resolution/2))
+            
+            # Plot result
+            ax.plot(samples[-1][:,0],samples[-1][:,1])
+        return fig,samples
+
+    def generate_streamline_selection(self,roughness_metric:str,map_type:str):
+        # Using RK4 for streamline
+        bounds = self.surface.bounds()
+        field = self.diropts[map_type][roughness_metric]
+        field = np.hstack([np.cos(field[:,np.newaxis]),np.sin(field[:,np.newaxis])])
+        
+        positions = self.samples
+        
+        # orient field to be continuously oriented (comb vectors)
+        field = _comb_vectorfield(positions,field)
+        dt = self.sample_spacing/4
+        self.surface._calculate_external_edges()
+        offset_bounds = _offset_bounds(self.surface.external_edge_bounds.tolist(),self.sample_window.radius)
+        # Pick point from plot
+        fig,ax = plt.subplots()
+        ax.quiver(
+            positions[:,0],positions[:,1],
+            field[:,0],field[:,1],
+            # headaxislength=1,headwidth=1,headlength=1
+        )
+        ax.plot(offset_bounds[:,0],offset_bounds[:,1])
+        ax.set_aspect('equal')
+        current_point = np.array(plt.ginput(timeout=-1)[0])
+        
+        # streamline generate
+        sample_positions = _streamline(
+            positions, field, offset_bounds, 
+            current_point,np.linalg.norm(self.surface.lengths),dt)
+        
+        # Resample line to spacing
+        sample_positions = np.array(sample_positions)
+        ax.plot(sample_positions[:,0],sample_positions[:,1])
+        plt.show(block=False)
+        print(f"Resampling polyline to {self.surface.resolution/2}")
+        new_sample_positions = _resample_polyline(
+            sample_positions,self.surface.resolution/2)
+        
+        ax.plot(new_sample_positions[:,0],new_sample_positions[:,1],'o')
+        plt.show(block=False)
+        return fig,new_sample_positions
+        
+        

@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 
 from surface_roughness import Surface
 
-s = Surface("example_surface.stl")
+s = Surface("scripts/example_surface.stl")
 
 s.evaluate_delta_t()
 delta_t_az = s.delta_t("az")

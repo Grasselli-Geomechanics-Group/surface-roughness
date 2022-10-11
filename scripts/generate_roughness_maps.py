@@ -10,6 +10,7 @@ w = SampleWindow(is_circle=True,radius=2.5)
 # files = ['example_surface.stl']
 files = [r'X:\20220113_surface_sampling_samples\Hydrostone_BD_results\BD_113_1a+2a.stl']
 # files = glob.glob("X:/20220113_surface_sampling_samples/Hydrostone_BD_results/BD_31/*.stl")
+# files = [r'X:/20220113_surface_sampling_samples/20220823_beza_direct_tension_top_1_1.stl']
 # files = glob.glob("X:/20220113_surface_sampling_samples/*.stl")
 # files = glob.glob("X:/20220113_surface_sampling_samples/Hydrostone_BD_results/*.stl")
 # files = glob.glob("X:/20220113_surface_sampling_samples/MontneyCCNBD2018/*.stl")
@@ -41,7 +42,7 @@ def generate_map(surface,method,submethods,w:
         # plt.savefig(f'{file}_{submethod_savestr}_r{w.radius}_roughnessmap.svg')
         map.to_vtk(f'{file}_{submethod_savestr}_r{w.radius}',submethod,find_edges=True)
         map.to_csv(f'{file}_{submethod_savestr}_r{w.radius}.csv')
-        map.print_directional_roughness(file,submethod)
+        # map.print_directional_roughness(file,submethod)
 
 for file in files:
     # if os.path.exists(f'{file}_delta_t_r2.5_directions.vtu'):

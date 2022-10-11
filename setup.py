@@ -66,7 +66,9 @@ setup(
         'numpy',
         'numexpr',
         'pandas',
-        'matplotlib'
+        'matplotlib',
+        'mplstereonet',
+        'shapely'
     ],
     cmdclass={"build_ext":build_ext},
     zip_safe=False,

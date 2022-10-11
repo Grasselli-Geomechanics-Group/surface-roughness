@@ -8,6 +8,9 @@ import pandas as pd
 from scipy.spatial.transform import Rotation
 from scipy.stats import gaussian_kde
 from scipy.spatial import ConvexHull
+from scipy.interpolate import griddata
+
+from shapely import geometry as sg
 
 from surface_roughness.roughness_impl import (
     _rs,
@@ -26,6 +29,10 @@ from surface_roughness._geometry_utils import (
     segments_intersecting,
     loop_points,
     original_segments_intersecting
+)
+
+from surface_roughness._profile import (
+    Profile
 )
 
 class Surface:
@@ -84,6 +91,15 @@ class Surface:
 
     def bounds(self) -> np.ndarray:
         return np.vstack([self.points.min(axis=0),self.points.max(axis=0)])
+    
+    def sample_profile(self,sample_points):
+        # Extract elevation points
+        point_data = self.points
+        x = np.linalg.norm(sample_points[1:] - sample_points[:-1],axis=1)
+        x = np.cumsum(np.hstack([0,x]))
+        z = griddata(point_data[:,:2],point_data[:,2],sample_points)
+
+        return Profile(np.hstack([x[:,np.newaxis],z[:,np.newaxis]]))
     
     def plot(self):
         # return pptk.viewer(self.points)
@@ -201,7 +217,7 @@ class Surface:
     @property
     def resolution(self) -> float:
         return np.sqrt(4/np.sqrt(3)*np.mean(self._areas))
-
+    
     @property
     def lengths(self) -> np.ndarray:
         return np.max(self.points,axis=0) - np.min(self.points,axis=0)
@@ -402,3 +418,5 @@ class Surface:
         }
         metric_methods[metric].to_pandas()
 
+    def plot_normal_orientations(self):
+        pass
