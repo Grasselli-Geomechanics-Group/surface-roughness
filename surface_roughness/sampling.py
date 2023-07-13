@@ -136,7 +136,7 @@ class RoughnessMap:
             'delta_t':['delta_t','delta*_t'],
             'delta_n':['delta_n','delta*_n'],
             'delta_a':['delta_a','delta*_a'],
-            'thetamax_cp1':['']
+            'thetamax_cp1':['thetamax_cp1']
         }
         if not self.roughness_method in self._methods:
             raise ValueError(f"Roughness method for roughness map must be {self._methods.keys()}")
@@ -179,7 +179,30 @@ class RoughnessMap:
             'min_unidirectional':'Min. DR',
             'max_unidirectional':'Max. DR',
             'minperp_unidirectional':'Min. Perp. DR'
-        }   
+        }
+    
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        del state['_evaluators']
+        del state['_methods']
+        return state
+
+    def __setstate__(self,state):
+        self.__dict__.update(state)
+        self._methods = {
+            'mean_dip':_cppMeanDipRoughness,
+            'delta_t':_cppTINBasedRoughness,
+            'delta_n':_cppTINBasedRoughness_againstshear,
+            'delta_a':_cppTINBasedRoughness_bestfit,
+            'thetamax_cp1':_cppDirectionalRoughness
+        }
+        self._evaluators = {
+            'mean_dip':_MeanDipRoughness_Evaluator,
+            'delta_t':_TINBasedRoughness_Evaluator,
+            'delta_n':_TINBasedRoughness_againstshear_Evaluator,
+            'delta_a':_TINBasedRoughness_bestfit_Evaluator,
+            'thetamax_cp1':_DirectionalRoughness_Evaluator
+        }
 
     def _reorient_points(self,samples,verbose):
         iter = tenumerate(list(samples)) if verbose else samples
@@ -285,29 +308,30 @@ class RoughnessMap:
         print("Analyzing sampled roughness...")
         evaluator = self._evaluators[self.roughness_method](self.surface.points,self.surface.triangles)
         calculators = evaluator.evaluate(self.t_in_circle)
-        self.raw_roughness_calculators = [DirRoughnessBase(impl=impl) for impl in calculators]
+        raw_roughness_calculators = [DirRoughnessBase(impl=impl) for impl in calculators]
         # self.raw_roughness_calculators:list[DirRoughnessBase] = [run_calc(i,tlist) for i,tlist in tqdm(enumerate(self.t_in_circle),total=len(self.t_in_circle))]
 
         # collect sample properties
-        self.final_orientations = np.array([c.final_orientation for c in self.raw_roughness_calculators])
-        self.min_bounds = np.array([c.min_bounds for c in self.raw_roughness_calculators])
-        self.max_bounds = np.array([c.max_bounds for c in self.raw_roughness_calculators])
-        self.centroids = np.array([c.centroid for c in self.raw_roughness_calculators])
-        self.shape_sizes = np.array([c.shape_size for c in self.raw_roughness_calculators])
-        self.total_areas = np.array([c.total_area for c in self.raw_roughness_calculators])
+        self.final_orientations = np.array([c.final_orientation for c in raw_roughness_calculators])
+        self.min_bounds = np.array([c.min_bounds for c in raw_roughness_calculators])
+        self.max_bounds = np.array([c.max_bounds for c in raw_roughness_calculators])
+        self.centroids = np.array([c.centroid for c in raw_roughness_calculators])
+        self.shape_sizes = np.array([c.shape_size for c in raw_roughness_calculators])
+        self.total_areas = np.array([c.total_area for c in raw_roughness_calculators])
         
-        self.az = self.raw_roughness_calculators[0]['az'][:,0]
+        self.az = raw_roughness_calculators[0]['az'][:,0]
         self.n_tri = [len(t_in_c) for t_in_c in self.t_in_circle]
-        self.n_tri_dir = np.vstack([c['n_tri'].T for c in self.raw_roughness_calculators])
+        self.n_tri_dir = np.vstack([c['n_tri'].T for c in raw_roughness_calculators])
 
+        for metric in self._submethods[self.roughness_method]:
+            self.roughness_data[metric] = np.vstack([c[metric].T for c in tqdm(raw_roughness_calculators)])
+        
     def analyze_directional_roughness(self,metric:str):
         """Process the roughness results for plotting
 
         :param metric: Metric to analyze directional roughness
         :type metric: str
         """
-        print("Aggregating data")
-        self.roughness_data[metric] = np.vstack([c[metric].T for c in tqdm(self.raw_roughness_calculators)])
 
         print("Collecting stats")
         # Collect bidirectional data
@@ -478,34 +502,35 @@ class RoughnessMap:
         ax.set_ylabel('Y (mm)')
         ax.axis('equal')
     
-    def to_csv(self,*args,**kwargs):
+    def to_csv(self,metric:str,*args,**kwargs):
         """Creates a CSV of map data
         *args, **kwargs for pandas dataframe outputs including filename and to_csv options
         """
-        def _build_df_row(calc:DirRoughnessBase):
+        def _build_df_row(idx):
             # flatten dataframe to row
-            sample_df:DataFrame = calc.to_pandas()
+            data = {str(az):datum for az,datum in zip(self.az,self.roughness_data[metric])}
+            sample_df:DataFrame = DataFrame(data)
             sample_df = sample_df.unstack().to_frame().sort_index(level=1).T
             sample_df.columns = [x+'_'+str(round(y*180/np.pi)) for x,y in sample_df.columns]
             
             # add properties
-            for dir,val in zip(['X','Y','Z'],calc.final_orientation):
+            for dir,val in zip(['X','Y','Z'],self.final_orientations[idx]):
                 sample_df[f'FinalOrientation_{dir}'] = val
 
-            for dir,val in zip(['left','bot'],calc.min_bounds):
+            for dir,val in zip(['left','bot'],self.min_bounds[idx]):
                 sample_df[f'Bounds_{dir}'] = val
-            for dir,val in zip(['right','top'],calc.max_bounds):
+            for dir,val in zip(['right','top'],self.max_bounds[idx]):
                 sample_df[f'Bounds_{dir}'] = val
-            for dir,val in zip(['X','Y','Z'],calc.centroid):
+            for dir,val in zip(['X','Y','Z'],self.centroids[idx]):
                 sample_df[f'Centroid_{dir}'] = val
-            for dir,val in zip(['X','Y','Z'],calc.shape_size):
+            for dir,val in zip(['X','Y','Z'],self.shape_sizes[idx]):
                 sample_df[f'Size_{dir}'] = val
 
-            sample_df['Area'] = calc.total_area
+            sample_df['Area'] = self.total_areas[idx]
 
             return sample_df
 
-        dfs = concat([_build_df_row(c) for c in self.raw_roughness_calculators])
+        dfs = concat([_build_df_row(c) for c in range(self.final_orientations.shape[0])])
         for key in self.max_roughness.keys():
             dfs['max_unidirectional_magnitude-'+key] = self.max_roughness[key]
             dfs['max_unidirectional_orientation-'+key] = self.max_roughness_dir[key]
@@ -527,16 +552,29 @@ class RoughnessMap:
     def print_directional_roughness(self,file_prefix:str,metric:str,**fig_kwargs):
         with PdfPages(f"{file_prefix}_{metric.replace('*','star')}.pdf") as pdf:
             print(f"Writing plots to {file_prefix}_{metric.replace('*','star')}.pdf")
-            fig,ax = plt.subplots(subplot_kw={"projection":"polar"},**fig_kwargs)
-            fig.tight_layout()
-            for data in tqdm(self.roughness_data[metric]):
-                
-                ax.plot(self.az,data)
-                pdf.savefig(fig)
-                ax.clear()
+            # fig,ax = plt.subplots(ncols=2,subplot_kw={"projection":"polar"},**fig_kwargs)
+            fig = plt.figure()
 
-    def to_vtk(self,file_prefix:str,metric:str,find_edges=False):
-        print(f"Writing to {file_prefix}_magnitude.vtu and {file_prefix}_directions.vtu")
+            fig.tight_layout()
+            ax = [fig.add_subplot(121,polar=True),fig.add_subplot(122)]
+            self.surface._calculate_edges()
+            b = self.surface.edge_bounds
+            ax[1].set_aspect('equal','box')
+            for data,position in tqdm(zip(self.roughness_data[metric],self.samples)):
+                
+                ax[0].plot(self.az,data)
+                for bound in b:
+                    ax[1].plot(bound[:,0],bound[:,1])
+                circle = plt.Circle(position,self.sample_window.radius,fill=False,color='r')
+                ax[1].add_patch(circle)
+                
+                pdf.savefig(fig)
+                ax[0].clear()
+                ax[1].clear()
+
+    def to_vtk(self,file_prefix:str,metric:str,find_edges=False,method='linear'):
+        data_path = f'{file_prefix}_roughness.vtu'
+        print(f"Writing to {data_path}")
         centroids = np.mean(self.surface.original_points[self.surface.triangles],axis=1)
         normals = self.surface.original_normals 
         
@@ -544,27 +582,46 @@ class RoughnessMap:
         
         if find_edges:
             # Determine points affected by edge
+            print("Drawing Boundary")
             self.surface._calculate_edges()
             bounds = self.surface.edge_bounds
-            mask = _centroids_in_offset_bounds(centroids,bounds,self.sample_window.radius)
+            bounds = _offset_bounds(bounds,self.sample_window.radius)
+            z = [griddata(self.surface.original_points[:,:2],self.surface.original_points[:,2],bound)[:,np.newaxis] for bound in bounds]
+            bounds = [np.hstack([bound,z_bound]) for bound,z_bound in zip(bounds,z)]
+            # mask = _centroids_in_offset_bounds(centroids,bounds,self.sample_window.radius).astype(np.uint8)
+            points = np.zeros([0,3])
+            cells = []
+            n_cells = 0
+            for bound in bounds:
+                points = np.vstack([points,bound])
+                cell_array = np.arange(bound.shape[0]-1)[:,np.newaxis]
+                cell_array = np.hstack([cell_array,cell_array+1])
+                cell_array = cell_array + n_cells
+                n_cells = n_cells + cell_array.shape[0] + 1
+                cells.append(("line",cell_array.astype(np.int32)))
+            edge_mesh = meshio.Mesh(
+                points.astype(np.float32),
+                cells
+            )
+            edge_mesh.write(f"{file_prefix}_boundary.vtu",compression='lzma')
                 
         roughness_data_vtk = {}
         print("Writing magnitude data")
         for key,val in tqdm(self.magopts.items()):
-            roughness_data_vtk[key] = [griddata(self.samples,val[metric],centroids[:,:2]).astype(np.float32)]
+            roughness_data_vtk[key] = [griddata(self.samples,val[metric],centroids[:,:2],method=method).astype(np.float32)]
             # roughness_data_vtk[key] = roughness_data_vtk[key].tolist()
         
         
         for az, col in tqdm(zip(self.az,range(self.roughness_data[metric].shape[1]))):
-            roughness_data_vtk[f"DR_{np.degrees(az):03.1f}"] = [griddata(self.samples,self.roughness_data[metric][:,col],centroids[:,:2]).astype(np.float32)]
+            roughness_data_vtk[f"DR_{np.degrees(az):03.1f}"] = [griddata(self.samples,self.roughness_data[metric][:,col],centroids[:,:2],method=method).astype(np.float32)]
             # roughness_data_vtk[f"DR_{np.degrees(az):03.1f}"] = roughness_data_vtk[f"DR_{np.degrees(az):03.1f}"].tolist()
 
         for az, col in tqdm(zip(self.az[:self.roughness_data_x2[metric].shape[1]],range(self.roughness_data_x2[metric].shape[1]))):
-            roughness_data_vtk[f"2DR_{np.degrees(az):03.1f}"] = [griddata(self.samples,self.roughness_data_x2[metric][:,col],centroids[:,:2]).astype(np.float32)]
+            roughness_data_vtk[f"2DR_{np.degrees(az):03.1f}"] = [griddata(self.samples,self.roughness_data_x2[metric][:,col],centroids[:,:2],method=method).astype(np.float32)]
             # roughness_data_vtk[f"2DR_{np.degrees(az):03.1f}"] = roughness_data_vtk[f"2DR_{np.degrees(az):03.1f}"].tolist()
 
-        if find_edges:
-            roughness_data_vtk['edge_mask'] = [mask]
+        # if find_edges:
+        #     roughness_data_vtk['edge_mask'] = [mask]
         roughness_data_vtk['min_unidirectional_dir'] = _generate_vtkdir_data(self.min_roughness_dir[metric],self.min_roughness[metric],centroids,normals,self.samples)
         roughness_data_vtk['max_unidirectional_dir'] = _generate_vtkdir_data(self.max_roughness_dir[metric],self.max_roughness[metric],centroids,normals,self.samples)
         roughness_data_vtk['minperp_unidirectional_dir'] = _generate_vtkdir_data(self.min_roughness_dir[metric]+np.pi/2,self.min_roughness[metric],centroids,normals,self.samples)
@@ -575,30 +632,28 @@ class RoughnessMap:
         cells = [("triangle",self.surface.triangles.astype(np.int32))]
         magnitude_mesh = meshio.Mesh(
             points,cells,
-            cell_data=roughness_data_vtk)
-        magnitude_mesh.write(f"{file_prefix}_magnitude.vtu",compression='lzma')
+            cell_data=roughness_data_vtk,
+            point_data={'elevation':self.surface.points[:,2]-np.mean(self.surface.points[:,2])})
+        magnitude_mesh.write(data_path,compression='lzma')
         
         
-        print("Writing directional data")
-        dir_data = {}
-        dir_data['min_unidirectional'] = _generate_vtkdir_data(self.min_roughness_dir[metric],self.min_roughness[metric],centroids,normals,self.samples)
-        dir_data['max_unidirectional'] = _generate_vtkdir_data(self.max_roughness_dir[metric],self.max_roughness[metric],centroids,normals,self.samples)
-        dir_data['minperp_unidirectional'] = _generate_vtkdir_data(self.min_roughness_dir[metric]+np.pi/2,self.min_roughness[metric],centroids,normals,self.samples)
-        dir_data['min_bidirectional'] = _generate_vtkdir_data(self.min_roughness_dir_x2[metric],self.min_roughness_x2[metric],centroids,normals,self.samples)
-        dir_data['max_bidirectional'] = _generate_vtkdir_data(self.max_roughness_dir_x2[metric],self.max_roughness_x2[metric],centroids,normals,self.samples)
-        dir_data['minperp_bidirectional'] = _generate_vtkdir_data(self.min_roughness_dir_x2[metric]+np.pi/2,self.min_roughness_x2[metric],centroids,normals,self.samples)
-        if find_edges:
-            dir_data['edge_mask'] = [mask]
-        dir_mesh = meshio.Mesh(
-            centroids,[('vertex',np.arange(centroids.shape[0],dtype=np.int32)[:,np.newaxis])],
-            cell_data=dir_data)
-        dir_mesh.write(f"{file_prefix}_directions.vtu",compression='lzma')
+        # print("Writing directional data")
+        # dir_data = {}
+        # dir_data['min_unidirectional'] = _generate_vtkdir_data(self.min_roughness_dir[metric],self.min_roughness[metric],centroids,normals,self.samples)
+        # dir_data['max_unidirectional'] = _generate_vtkdir_data(self.max_roughness_dir[metric],self.max_roughness[metric],centroids,normals,self.samples)
+        # dir_data['minperp_unidirectional'] = _generate_vtkdir_data(self.min_roughness_dir[metric]+np.pi/2,self.min_roughness[metric],centroids,normals,self.samples)
+        # dir_data['min_bidirectional'] = _generate_vtkdir_data(self.min_roughness_dir_x2[metric],self.min_roughness_x2[metric],centroids,normals,self.samples)
+        # dir_data['max_bidirectional'] = _generate_vtkdir_data(self.max_roughness_dir_x2[metric],self.max_roughness_x2[metric],centroids,normals,self.samples)
+        # dir_data['minperp_bidirectional'] = _generate_vtkdir_data(self.min_roughness_dir_x2[metric]+np.pi/2,self.min_roughness_x2[metric],centroids,normals,self.samples)
+        # if find_edges:
+        #     dir_data['edge_mask'] = [mask]
+        # dir_mesh = meshio.Mesh(
+        #     centroids,[('vertex',np.arange(centroids.shape[0],dtype=np.int32)[:,np.newaxis])],
+        #     cell_data=dir_data)
+        # dir_mesh.write(f"{file_prefix}_directions.vtu",compression='lzma')
 
     def generate_spaced_streamlines(self,roughness_metric,map_type,n_lines):
         # Using RK4 for streamline
-        sample_positions = deque()
-        
-        bounds = self.surface.bounds()
         field = self.diropts[map_type][roughness_metric]
         field = np.hstack([np.cos(field[:,np.newaxis]),np.sin(field[:,np.newaxis])])
         
@@ -608,13 +663,13 @@ class RoughnessMap:
         field = _comb_vectorfield(positions,field)
         dt = self.sample_spacing/4
         self.surface._calculate_external_edges()
-        offset_bounds = _offset_bounds(self.surface.external_edge_bounds.tolist(),self.sample_window.radius)
+        offset_bounds = _offset_bounds([self.surface.external_edge_bounds],self.sample_window.radius)[0]
         # Pick point 1
         fig,ax = plt.subplots()
         ax.quiver(
             positions[:,0],positions[:,1],
             field[:,0],field[:,1],
-            # headaxislength=1,headwidth=1,headlength=1
+            headaxislength=1,headwidth=1,headlength=1
         )
         ax.plot(offset_bounds[:,0],offset_bounds[:,1])
         ax.set_aspect('equal')
@@ -641,7 +696,7 @@ class RoughnessMap:
             raw_positions = np.array(raw_positions)
             
             # Resample
-            samples.append(_resample_polyline(raw_positions,self.surface.resolution/2))
+            samples.append(_resample_polyline(raw_positions,self.surface.resolution/4))
             
             # Plot result
             ax.plot(samples[-1][:,0],samples[-1][:,1])
@@ -659,7 +714,7 @@ class RoughnessMap:
         field = _comb_vectorfield(positions,field)
         dt = self.sample_spacing/4
         self.surface._calculate_external_edges()
-        offset_bounds = _offset_bounds(self.surface.external_edge_bounds.tolist(),self.sample_window.radius)
+        offset_bounds = _offset_bounds([self.surface.external_edge_bounds],self.sample_window.radius)[0]
         # Pick point from plot
         fig,ax = plt.subplots()
         ax.quiver(
@@ -680,7 +735,7 @@ class RoughnessMap:
         sample_positions = np.array(sample_positions)
         ax.plot(sample_positions[:,0],sample_positions[:,1])
         plt.show(block=False)
-        print(f"Resampling polyline to {self.surface.resolution/2}")
+        print(f"Resampling polyline to {self.surface.resolution/4}")
         new_sample_positions = _resample_polyline(
             sample_positions,self.surface.resolution/2)
         

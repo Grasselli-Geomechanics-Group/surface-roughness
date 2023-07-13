@@ -3,7 +3,6 @@ from collections import deque
 import numpy as np
 from scipy.interpolate import griddata
 from scipy.spatial import KDTree
-from tqdm import trange
 import numexpr as ne
 
 from surface_roughness._geometry_utils import (
@@ -33,17 +32,25 @@ def _resample_polyline(positions,spacing:float):
         direction = positions[current_point_idx+1] - current_position
         direction = direction / np.linalg.norm(direction)
         new_point = direction * traverse_dt + current_position
+        if np.any(np.isnan(new_point)):
+            break
         new_positions.append(new_point)
         current_position = new_point
     
     return np.array(new_positions)
 
 def _next_point(current_position,current_velocity,field,positions,dt):
+    # Orient field along current velocity
+    current_velocity = current_velocity / np.linalg.norm(current_velocity)
+    orientation = field @ current_velocity
+    orientation = orientation / np.abs(orientation)
+    newfield = field * orientation[:,np.newaxis]
+    
     # RK4 streamline method
     k1 = dt * current_velocity
-    k2 = dt * griddata(positions,field,current_position + k1/2)[0]
-    k3 = dt * griddata(positions,field,current_position + k2/2)[0]
-    k4 = dt * griddata(positions,field,current_position + k3)[0]
+    k2 = dt * griddata(positions,newfield,current_position + k1/2)[0]
+    k3 = dt * griddata(positions,newfield,current_position + k2/2)[0]
+    k4 = dt * griddata(positions,newfield,current_position + k3)[0]
     return current_position + (k1 + 2*k2 + 2*k3 + k4)/6
 
 def _comb_vectorfield(positions,field):
@@ -85,42 +92,25 @@ def _generate_vtkdir_data(raw_dir_data,magnitudes,centroids,normals,samples):
     return [vtk_dir]
 
 def _offset_bounds(bounds,distance_offset):
-    polygon = geometry.Polygon(bounds)
-    polygon = polygon.buffer(-distance_offset)
-    x = np.array(polygon.exterior.xy[0])[:,np.newaxis]
-    y = np.array(polygon.exterior.xy[1])[:,np.newaxis]
-    return np.hstack([x,y])
+    newbounds = []
+    for bound in bounds:
+        polygon = geometry.Polygon(bound[:,:2])
+        polygon = polygon.buffer(-distance_offset)
+        if polygon.geom_type == 'MultiPolygon':
+            current_poly = polygon.geoms[0]
+            for poly in polygon.geoms:
+                if poly.area > current_poly.area:
+                    current_poly = poly
+            polygon = current_poly
+        x = np.array(polygon.exterior.xy[0])[:,np.newaxis]
+        y = np.array(polygon.exterior.xy[1])[:,np.newaxis]
+        newbounds.append(np.hstack([x,y]))
+    
+    return newbounds
 
 def _centroids_in_offset_bounds(centroids,bounds,distance_from_boundary):
-    mask = np.zeros([centroids.shape[0]],dtype=np.uint8)
-    for i,bound in enumerate(bounds):
-        print(f"Calculating centroids within {distance_from_boundary} of internal bounds {i}")
-        #https://stackoverflow.com/questions/849211/shortest-distance-between-a-point-and-a-line-segment/4165840?
-        # bounded_centroids_idx = np.where(np.array([point_in_polygon(p,bound) for p in centroids]))
-        bounded_centroids_idx = np.where(points_in_polygon(centroids,bound))[0]
-        picked_centroids_idx = np.zeros([0],dtype=int)
-        
-        for b_i in trange(bound.shape[0]):
-            filtered_centroids = centroids[bounded_centroids_idx]
-            filtered_mask = np.zeros([bounded_centroids_idx.shape[0]],dtype=np.bool_)
-            p1 = bound[b_i-1]
-            p2 = bound[b_i]
-
-            ab = filtered_centroids-p1
-            cd = p2 - p1
-            lensq = np.sum(cd**2)
-            param = np.tensordot(ab,cd,axes=1)/(lensq if lensq != 0 else -1)
-            xx = param[:,np.newaxis] * cd + p1
-            xx[param < 0] = p1
-            xx[param > 1] = p2
-
-            distances = np.linalg.norm(filtered_centroids-xx,axis=1)
-            filtered_mask[distances < distance_from_boundary] = True
-            
-            picked_centroids_idx = np.hstack([picked_centroids_idx,bounded_centroids_idx[filtered_mask]])
-            bounded_centroids_idx = np.delete(bounded_centroids_idx,filtered_mask)
-        
-        mask[picked_centroids_idx] = 1
+    offset_bounds = np.vstack(_offset_bounds(bounds,distance_from_boundary))
+    return points_in_polygon(centroids,offset_bounds)
         
 def _triangles_from_p_in_sample(triangles,point_in_sample):
     return np.all(point_in_sample[triangles],axis=1)
@@ -134,6 +124,8 @@ def _streamline(positions,field,offset_bounds,starter,max_length,dt):
     velocity = griddata(positions,field,starter)[0]
     current_point = starter
     length = 0
+    
+    max_n_samples = max_length/dt*3
     while True:
         new_point = _next_point(current_point,velocity,field,positions,dt)
         if np.isnan(new_point[0]):
@@ -144,6 +136,8 @@ def _streamline(positions,field,offset_bounds,starter,max_length,dt):
         if not point_in_polygon(current_point,offset_bounds):
             break
         if length > max_length:
+            break
+        if len(sample_positions) > max_n_samples:
             break
         if new_point[0] < offset_bounds[0,0] and new_point[0] > offset_bounds[1,0]:
             if new_point[1] < offset_bounds[0,1] and new_point[1] > offset_bounds[1,1]:
@@ -159,6 +153,8 @@ def _streamline(positions,field,offset_bounds,starter,max_length,dt):
         if not point_in_polygon(current_point,offset_bounds):
             break
         if length > max_length:
+            break
+        if len(sample_positions) > 2*max_n_samples:
             break
         if new_point[0] < offset_bounds[0,0] and new_point[0] > offset_bounds[1,0]:
             if new_point[1] < offset_bounds[0,1] and new_point[1] > offset_bounds[1,1]:

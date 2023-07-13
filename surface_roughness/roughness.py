@@ -12,6 +12,8 @@ from scipy.interpolate import griddata
 
 from shapely import geometry as sg
 
+import matplotlib.pyplot as plt
+
 from surface_roughness.roughness_impl import (
     _rs,
     _cppDirectionalRoughness,
@@ -70,6 +72,23 @@ class Surface:
             print("Calculating normals...")
         self._calculate_normals()
     
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        del state['_thetamax_cp1']
+        del state['_delta_t']
+        del state['_delta_a']
+        del state['_delta_n']
+        del state['_meandip']
+        return state
+
+    def __setstate__(self,state):
+        self.__dict__.update(state)
+        self._thetamax_cp1 = None
+        self._delta_t = None
+        self._delta_a = None
+        self._delta_n = None
+        self._meandip = None
+    
     @property
     def original_points(self):
         return self._mesh.points
@@ -118,6 +137,9 @@ class Surface:
             self._calculate_edges()
 
     def _calculate_external_edges(self):
+        if not hasattr(self,'external_edge_bounds'):
+            self.external_edge_bounds = None
+
         if self.external_edge_bounds is None:
             if self.edge_bounds is None:
                 self._calculate_edges()
@@ -177,39 +199,55 @@ class Surface:
             self.polygon_loop = sorted(polygon_loop,key=lambda x: len(x),reverse=True)
             if self.verbose:
                 print("Orienting polygon loops")
-            current_loop = 0
-            loop_count = 0
-            loop_max = len(self.polygon_loop)
-            while current_loop != len(self.polygon_loop)-1:
-                break_loop = False
-                for l_i,loop in enumerate(self.polygon_loop[current_loop+1:],1):
-                    if len(loop) < 3:
-                        del self.polygon_loop[l_i]
-                        break_loop = True
-                        break
-                    small_poly_segments = create_event_list(loop,self.points)
-                    for big_loop in self.polygon_loop[:current_loop+1]:
-                        big_poly_segments = create_event_list(big_loop,self.points)
-                        if not segments_intersecting(big_poly_segments,small_poly_segments):
-                            if point_in_polygon(
-                                self.points[loop[0]],
-                                loop_points(self.polygon_loop[current_loop],self.points)):
-                                del self.polygon_loop[l_i]
-                                break_loop = True
-                                break
-                            else:
-                                # new polygon
-                                current_loop += 1
-                    if break_loop:
-                        break
-                loop_count += 1
-                if loop_count > loop_max:
-                    break
-            self.edge_bounds = [
-                np.vstack([self.points[index] for index in list(polygon_loop)[:-1]])
-                for polygon_loop in self.polygon_loop
-            ]
-    
+                
+            self.edge_bounds = [self.points[loop] for loop in self.polygon_loop]
+            # current_loop = 0
+            # loop_count = 0
+            # loop_max = len(self.polygon_loop)
+            # while current_loop != len(self.polygon_loop)-1:
+            #     break_loop = False
+            #     for l_i,loop in enumerate(self.polygon_loop[current_loop+1:],1):
+            #         if len(loop) < 3:
+            #             del self.polygon_loop[l_i]
+            #             break_loop = True
+            #             break
+            #         small_poly_segments = create_event_list(loop,self.points)
+            #         for big_loop in self.polygon_loop[:current_loop+1]:
+            #             big_poly_segments = create_event_list(big_loop,self.points)
+            #             if not segments_intersecting(big_poly_segments,small_poly_segments):
+            #                 if point_in_polygon(
+            #                     self.points[loop[0]],
+            #                     loop_points(self.polygon_loop[current_loop],self.points)):
+            #                     del self.polygon_loop[l_i]
+            #                     break_loop = True
+            #                     break
+            #                 else:
+            #                     # new polygon
+            #                     current_loop += 1
+            #         if break_loop:
+            #             break
+            #     loop_count += 1
+            #     if loop_count > loop_max:
+            #         break
+            # self.edge_bounds = [
+            #     np.vstack([self.points[index] for index in list(polygon_loop)[:-1]])
+            #     for polygon_loop in self.polygon_loop
+            # ]
+            # Find primary bounds
+            primary_idx = []
+            for idx,bound in enumerate(self.edge_bounds):
+                poly = sg.Polygon(bound)
+                if poly.area > 0.05 * self.area:
+                    primary_idx.append(idx)
+            self.edge_bounds = [self.edge_bounds[id] for id in primary_idx]
+            
+            # Simplify geometry
+            simple_geometry = []
+            for bound in self.edge_bounds:
+                poly = sg.Polygon(bound)
+                poly = poly.simplify(self.resolution*3)
+                simple_geometry.append(poly.exterior.coords.xy)
+            self.edge_bounds = [np.vstack([g[0],g[1]]).T for g in simple_geometry]
     @property
     def area(self) -> float:
         return np.sum(self._areas)
@@ -416,7 +454,7 @@ class Surface:
             'delta_t':self._delta_t,
             'thetamax_cp1':self._thetamax_cp1
         }
-        metric_methods[metric].to_pandas()
+        return metric_methods[metric].to_pandas()
 
     def plot_normal_orientations(self):
         pass

@@ -19,3 +19,5 @@ prebuild/OpenBLAS-0.3.20-x86/
 *.code-workspace
 *.diagsession
 *.data*
+.venv
+*.npy

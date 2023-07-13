@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from copy import deepcopy
 
 import numpy as np
+import shapely.geometry as sg
 
 @dataclass
 class Event:
@@ -224,72 +225,7 @@ def sort_boundary(points:np.ndarray):
 
 def points_in_polygon(p:np.ndarray,segments):
     # grid search
-    x_grid = np.linspace(p[:,0].min()-.5,p[:,0].max()+.5,20)
-    y_grid = np.linspace(p[:,1].min()-.5,p[:,1].max()+.5,20)
+    points = sg.MultiPoint(p[:,:2])
+    poly = sg.Polygon(segments[:,:2])
+    return np.array([poly.contains(point) for point in points.geoms])
     
-    # Group point indices based on grid location
-    storage:dict[list[int]] = {}
-    for x_i in range(x_grid.shape[0]-1):
-        for y_i in range(y_grid.shape[0]-1):
-            x_check = np.logical_and(x_grid[x_i] <= p[:,0],p[:,0] < x_grid[x_i+1])
-            y_check = np.logical_and(y_grid[y_i] <= p[:,1],p[:,1] < y_grid[y_i+1])
-            
-            storage[(x_i,y_i)] = np.where(np.logical_and(x_check,y_check))[0]
-    
-    # Find grids intersected by boundary
-    boundary_grids = set()
-    for x_i in range(x_grid.shape[0]-1):
-        for y_i in range(y_grid.shape[0]-1):
-            x_check = np.logical_and(x_grid[x_i] <= segments[:,0],segments[:,0] < x_grid[x_i+1])
-            y_check = np.logical_and(y_grid[y_i] <= segments[:,1],segments[:,1] < y_grid[y_i+1])
-            
-            if np.any(np.logical_and(x_check,y_check)):
-                boundary_grids.add((x_i,y_i))
-    
-    if len(boundary_grids) < 3:
-        return np.zeros(p.shape[0],dtype=np.bool_)
-    # Find grids fully inside boundary grids
-    rough_boundaries = np.array([[(x_grid[x_i]+x_grid[x_i+1])/2,(y_grid[y_i]+y_grid[y_i+1])/2] for x_i,y_i in list(boundary_grids)])
-
-    # Sort rough_boundaries   
-    rough_boundaries = sort_boundary(rough_boundaries)
-    rough_boundaries = np.vstack([rough_boundaries,rough_boundaries[0]])
-    inside_grid = set()
-    for gridpoint in storage:
-        x = (x_grid[gridpoint[0]]+x_grid[gridpoint[0]+1])/2
-        y = (y_grid[gridpoint[1]] + y_grid[gridpoint[1]+1])/2
-        if point_in_polygon(np.array([x,y]),rough_boundaries):
-            inside_grid.add(gridpoint)
-    
-    # Initialize in_polygon matrix with inner grid point indices
-    in_polygon = np.zeros(p.shape[0],dtype=np.bool_)
-    for grid in inside_grid:
-        in_polygon[storage[grid]] = True
-
-    
-    # Generate points to test within boundary grids
-    test_points_idx = np.zeros([0],dtype=int)
-    for grid in boundary_grids:
-        test_points_idx = np.hstack([test_points_idx,storage[grid]])
-    
-    test_points = p[test_points_idx]
-
-    # Winding number test for boundary points
-    # https://web.archive.org/web/20130126163405/http://geomalgorithms.com/a03-_inclusion.html
-    winding_numbers = np.zeros([test_points.shape[0]])
-    for i,point in enumerate(segments):
-        prev_point = segments[i-1]
-        
-        left_checks = (point[0] - prev_point[0]) * (test_points[:,1]-prev_point[1]) - (test_points[:,0]-prev_point[0]) * (point[1] - prev_point[1])
-        
-        upward_check = np.logical_and(prev_point[1] <= test_points[:,1],point[1] > test_points[:,1])
-        winding_numbers[np.logical_and(upward_check,left_checks > 0)] += 1
-        
-        
-        downward_check = np.logical_and(prev_point[1] > test_points[:,1],point[1] <= test_points[:,1])
-        winding_numbers[np.logical_and(downward_check,left_checks < 0)] -= 1
-
-    # Odd winding number means it's in polygon
-    in_polygon[test_points_idx[(winding_numbers % 2) == 1]] = True
-    
-    return in_polygon

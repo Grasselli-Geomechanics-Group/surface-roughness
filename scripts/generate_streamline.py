@@ -1,5 +1,6 @@
 import glob
 import os
+import pickle
 
 from surface_roughness import Surface, SampleWindow, roughness, roughness_map
 from surface_roughness._profile import power_law, powerlaw_fitting
@@ -8,12 +9,18 @@ import matplotlib.pyplot as plt
 
 w = SampleWindow(is_circle=True,radius=2.5)
 # file = 'scripts/example_surface.stl'
-file = r'X:\20220113_surface_sampling_samples\20220930_Beza_direct_tension_2_top_1_1.stl'
+# file = r'X:\20220113_surface_sampling_samples\20220930_Beza_direct_tension_2_top_1_1.stl'
+file = r'X:\20220113_surface_sampling_samples\MontneyBD2018\BD_montney_MG3_2_2LG4_top_intact_1_1_cropped.stl'
 surface = Surface(path=file)
-map = roughness_map(surface,'delta_t',w,1,1)
-map.sample(verbose=True)
-map.evaluate()
-map.analyze_directional_roughness('delta_t')
+pickle_suffix = '.pickle'
+if os.path.exists(f'{file}{pickle_suffix}'):
+    with open(f'{file}{pickle_suffix}','rb') as f:
+        map = pickle.load(f)
+else:
+    map = roughness_map(surface,'delta_t',w,1,1)
+    map.sample(verbose=True)
+    map.evaluate()
+    map.analyze_directional_roughness('delta_t')
 fig,samples = map.generate_streamline_selection('delta_t','min_bidirectional')
 fig.savefig(f'{file}_parallel_profile.png')
 profile_par = surface.sample_profile(samples)
