@@ -7,16 +7,17 @@ import platform
 
 debug = False
 
-if debug:
-    if platform.system() == "Windows":
-        cpp_args=['/Od','/Zi','/openmp']
-        linkargs = ['/DEBUG']
-    else:
-        cpp_args = []
-        linkargs = []
-else:
-    cpp_args = ['/openmp']
+
+if platform.system() == "Windows":
+    cpp_args=['/Od','/Zi','/openmp']
     linkargs = []
+    if debug:
+        cpp_args.extend(['/Od','/Zi'])
+        linkargs.extend(['/DEBUG'])
+else:
+    cpp_args = ['-fopenmp']
+    linkargs = []
+    
  
 roughness_cppimpl_sources = [
     "surface_roughness/_roughness_cppimpl.cpp",
