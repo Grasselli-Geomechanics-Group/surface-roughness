@@ -179,6 +179,7 @@ void DirectionalRoughness::evaluate(DirectionalSetting settings, bool verbose_,s
     this->parameters.insert({"a0",A_0_parameter_});
     this->parameters.insert({"thetamax_cp1",(theta_max_ / (C_fitting_ + 1))});
     this->parameters.insert({"gof", chi_gof_});
+	this->parameters.insert({"dip_bin_data",dip_bins_data_});
 	if (!file_path.empty()) save_file(file_path);
     points.resize(0,0);
     triangles.resize(0,0);
