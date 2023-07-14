@@ -51,7 +51,7 @@ roughness_cppimpl = Pybind11Extension(
 
 setup(
     name="surface-roughness",
-    version="0.0.1",
+    version="0.0.2",
     description="Surface roughness calculation with Python",
     long_description=(Path(__file__).parent/"README.md").read_text(),
     author="Earl Magsipoc",
