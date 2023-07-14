@@ -24,9 +24,9 @@
 namespace py = pybind11;
 
 #define RegisterDirectional(directional_class,name,module) \
-    py::class_<directional_class,Directional>(module,"_cpp"##name"_impl").def(py::init<Eigen::MatrixX3d,Eigen::MatrixX3i>()).def(py::init<Eigen::MatrixX3d,Eigen::MatrixX3i,Eigen::ArrayXi>());\
-    module.def("_cpp"##name"_Settings_impl",[](){return directional_class::Setting();});\
-    py::class_<Evaluator<directional_class>>(module,"_"##name"_Evaluator").def(py::init<Eigen::MatrixX3d,Eigen::MatrixX3i>()).def("evaluate",&Evaluator<directional_class>::evaluate)\
+    py::class_<directional_class,Directional>(module,"_cpp" name "_impl").def(py::init<Eigen::MatrixX3d,Eigen::MatrixX3i>()).def(py::init<Eigen::MatrixX3d,Eigen::MatrixX3i,Eigen::ArrayXi>());\
+    module.def("_cpp" name "_Settings_impl",[](){return directional_class::Setting();});\
+    py::class_<Evaluator<directional_class>>(module,"_" name "_Evaluator").def(py::init<Eigen::MatrixX3d,Eigen::MatrixX3i>()).def("evaluate",&Evaluator<directional_class>::evaluate)\
 
 
 class PyDirectional : public Directional {
