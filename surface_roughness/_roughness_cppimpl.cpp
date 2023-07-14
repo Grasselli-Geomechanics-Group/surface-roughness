@@ -4,8 +4,9 @@
 #include <chrono>
 #include <string>
 
-
+#if defined(_OPENMP)
 #include <omp.h>
+#endif
 
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
@@ -92,6 +93,7 @@ public:
             
             // Print every 1%
             if ((i*2/2 * 100 / n_samples )% 2 == 0) {
+                #if defined(_OPENMP)
                 if (omp_get_thread_num() == 0) {
                     #pragma omp critical
                     {
@@ -99,6 +101,10 @@ public:
                         print_progress(progress,duration);
                     }
                 }
+                #else
+                duration = duration_cast<seconds>(high_resolution_clock::now() - start);
+                print_progress(progress,duration);
+                #endif
             }
             
         }
