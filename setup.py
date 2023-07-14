@@ -14,8 +14,12 @@ if platform.system() == "Windows":
     if debug:
         cpp_args.extend(['/Od','/Zi'])
         linkargs.extend(['/DEBUG'])
-else:
+elif platform.system() == "Linux":
     cpp_args = ['-fopenmp']
+    linkargs = []
+else:
+    # disable openmp for non-linux/windows systems
+    cpp_args = []
     linkargs = []
     
  
