@@ -20,11 +20,12 @@ public:
 	using Directional::Directional;
 	void evaluate(DirectionalSetting settings = Directional::Setting(),bool verbose=false, std::string file=std::string());
 	static DirectionalSetting Setting() {
-		return DirectionalSetting({
-			{"n_az",72.},
-			{"az_offset",0.},
-			{"min_triangles",200}
-		});
+		DirectionalSetting setting;
+        setting.set("n_az",72.);
+        setting.set("az_offset",0.);
+        setting.set("min_triangles",200);
+
+        return setting;
 	}
 
 private:

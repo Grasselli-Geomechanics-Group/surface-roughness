@@ -16,17 +16,17 @@ public:
 	using Directional::Directional;
 	void evaluate(DirectionalSetting settings = Directional::Setting(),bool verbose=false, std::string file=std::string());
 	static DirectionalSetting Setting() {
-		return DirectionalSetting({
-			{"n_az",72.},
-			{"az_offset",0.},
-			{"n_dip_bins",90},
-			{"fit_initialguess",1},
-			{"fit_precision",6},
-			{"fit_regularization",10e-10},
-			{"fit_alpha",0.01},
-			{"fit_beta",0.5},
-			{"min_triangles",200}
-		});
+		DirectionalSetting setting;
+		setting.set("n_az",72.);
+		setting.set("az_offset",0.);
+		setting.set("n_dip_bins",90);
+		setting.set("fit_initialguess",1);
+		setting.set("fit_precision",6);
+		setting.set("fit_regularization",10e-10);
+		setting.set("fit_alpha",0.01);
+		setting.set("fit_beta",0.5);
+		setting.set("min_triangles",200);
+		return setting;
 	}
 
 private:

@@ -21,11 +21,12 @@ public:
     Directional(Eigen::MatrixX3d points, Eigen::MatrixX3i triangles);
     Directional(Eigen::MatrixX3d points, Eigen::MatrixX3i triangles, Eigen::ArrayXi selected_triangles);
     static DirectionalSetting Setting() {
-        return DirectionalSetting({
-			{"n_az",72.},
-			{"az_offset",0.},
-			{"min_triangles",200}
-		});
+        DirectionalSetting setting;
+        setting.set("n_az",72.);
+        setting.set("az_offset",0.);
+        setting.set("min_triangles",200);
+
+        return setting;
     }
     virtual void evaluate(DirectionalSetting setting, bool verbose, std::string file) = 0;
     Eigen::ArrayXXd operator[](std::string key) {return parameters[key];}
