@@ -10,7 +10,7 @@
 #include <Eigen/Core>
 
 #include "DirectionalUtil.h"
-#include "DIrectional.h"
+#include "Directional.h"
 
 void MeanDipRoughness::evaluate(DirectionalSetting settings, bool verbose_,std::string file_path)
 {

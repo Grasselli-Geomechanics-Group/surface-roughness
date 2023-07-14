@@ -1,5 +1,5 @@
-#ifndef _TINBASEDROUGHNESS_AGAINSTSHEAR_H
-#define _TINBASEDROUGHNESS_AGAINSTSHEAR_H
+#ifndef _MEANAPPARENTDIP_H
+#define _MEANAPPARENTDIP_H
 #define _USE_MATH_DEFINES
 
 #include <math.h>
@@ -9,26 +9,26 @@
 
 #include <Eigen/Core>
 
-#include "TINBasedRoughness.h"
 #include "Directional.h"
 
-class TINBasedRoughness_againstshear : public Directional
+class MeanDipRoughness : public Directional
 {
 public:
 	using Directional::Directional;
 	void evaluate(DirectionalSetting settings = Directional::Setting(),bool verbose=false, std::string file=std::string());
 	static DirectionalSetting Setting() {
-		return DirectionalSetting({
-			{"n_az",72.},
-			{"az_offset",0.},
-			{"min_triangles",200}
-		});
+		DirectionalSetting setting;
+        setting.set("n_az",72.);
+        setting.set("az_offset",0.);
+        setting.set("min_triangles",200);
+
+        return setting;
 	}
 
 private:
 	// Collected parameters
-	Eigen::ArrayXXd delta_n_;
-	Eigen::ArrayXXd delta_star_n_;
+	Eigen::ArrayXXd mean_dip_;
+	Eigen::ArrayXXd std_dip_;
 };
 
-#endif //_TINBASEDROUGHNESS_AGAINSTSHEAR_H
+#endif //_MEANAPPARENTDIP_H

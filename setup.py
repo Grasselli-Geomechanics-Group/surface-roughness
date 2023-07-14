@@ -29,7 +29,7 @@ roughness_cppimpl_sources = [
     "surface_roughness/_roughness_cpp/MeanApparentDip.cpp"
 ]
 roughness_cppimpl_includes = [
-        'surface_roughness/_roughness_cpp/include',
+        'surface_roughness/_roughness_cpp',
         'eigen'
 ]
 headers = []

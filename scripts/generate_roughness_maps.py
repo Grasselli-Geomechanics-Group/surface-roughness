@@ -6,7 +6,7 @@ import pickle
 from surface_roughness import Surface, SampleWindow, roughness, roughness_map
 import numpy as np
 import matplotlib.pyplot as plt
-radius=2.5
+radius=1
 w = SampleWindow(is_circle=True,radius=radius)
 # files = [r'scripts\example_surface.stl']
 # files = [r'X:\20220113_surface_sampling_samples\Hydrostone_BD_results\BD_113_1a+2a.stl']
@@ -25,7 +25,8 @@ w = SampleWindow(is_circle=True,radius=radius)
 # files.extend(glob.glob("X:/20220113_surface_sampling_samples/roadcut_results/*.stl"))
 # files = glob.glob("X:/20220113_surface_sampling_samples/PLT/*.stl")
 # files = glob.glob("X:/20220113_surface_sampling_samples/roadcut_results/*.stl")
-files = glob.glob("C:/Users/emags/OneDrive - University of Toronto/20230700_megablock/*.stl")
+#files = glob.glob("C:/Users/emags/OneDrive - University of Toronto/20230700_megablock/*.stl")
+files = ["C:/Users/emags/OneDrive - University of Toronto/20230700_megablock/20230713_8d-1_BD_fracture_1_1_side_b.stl"]
  
 def generate_map(surface,file,method,submethods,w:SampleWindow):
     print(f"Analyzing {file}")
@@ -63,7 +64,8 @@ for file in files:
         # continue
     surface = Surface(path=file)
 
-    generate_map(surface,file,'delta_t',['delta_t','delta*_t'],w)
+    # generate_map(surface,file,'delta_t',['delta_t','delta*_t'],w)
+    generate_map(surface,file,'delta_t',['delta_t'],w)
     
     # generate_map(surface,'thetamax_cp1',['thetamax_cp1'],w)
     # generate_map(surface,'delta_a',['delta_a','delta*_a'],w)
