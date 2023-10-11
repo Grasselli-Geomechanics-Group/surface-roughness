@@ -9,10 +9,7 @@ import matplotlib.pyplot as plt
 
 w = SampleWindow(is_circle=True,radius=2.5)
 files = ['example_surface.stl']
-# files = glob.glob("X:/20220113_surface_sampling_samples/Hydrostone_BD_results/*.stl")
 
-# files = glob.glob("X:/20220113_surface_sampling_samples/buckinghorse/*.stl")
-# files = glob.glob("X:/20220113_surface_sampling_samples/20220718_EM_alberta_roadcut_sample_1_1_s*.stl")
 
 def generate_map(surface,method,submethods,w:SampleWindow):
     map = roughness_map(surface,method,w,1,1)

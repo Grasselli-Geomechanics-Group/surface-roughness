@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+authors:
+- family-names: "Magsipoc"
+  given-names: "Earl"
+title: "Surface Roughness"
+version: 0.0.2
+date-released: 2023-08-16
+url: "https://github.com/Grasselli-Geomechanics-Group/surface-roughness"
+preferred-citation:
+  type: article
+  authors:
+  - family-names: "Magsipoc"
+    given-names: "Earl"
+  - family-names: "Grasselli"
+    given-names: "Giovanni"
+  journal: "International Journal for Rock Mechanics and Mining Sciences"
+  month: 12
+  start: 105593
+  volume: 172
+  title: "A local surface roughness mapping method for post-failure interpretation of brittle fracture propagation"
+  year: 2023
+  doi: 10.1016/j.ijrmms.2023.105593
