@@ -8,12 +8,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 w = SampleWindow(is_circle=True,radius=2.5)
-# file = 'scripts/example_surface.stl'
-# file = r'X:\20220113_surface_sampling_samples\20220823_beza_direct_tension_bot_1_1.stl'
-# file = r'X:\20220113_surface_sampling_samples\MontneyCCNBD2018\Petronas_M3-3-No2_CCNBD_side1_trimmed.stl'
-# file = r'X:\20220113_surface_sampling_samples\Hydrostone_BD_results\BD_72_1a.stl'
-# file = r'X:\20220113_surface_sampling_samples\MontneyBD2018\BD_montney_MG3_2_2LG4_top_intact_1_1_cropped.stl'
-# file = r'X:\20220113_surface_sampling_samples\MontneyBD2018\BD_montney_MG3_2_2LG4_bot_broken_1_1_cropped.stl'
 file = r'X:\20220113_surface_sampling_samples\MontneyBD2018\BD_montney_MG3_2_1LG4_bot_intact_1_1_cropped.stl'
 surface = Surface(path=file)
 pickle_suffix = '_r2.5.pickle'
