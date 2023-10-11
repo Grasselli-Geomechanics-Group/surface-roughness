@@ -6,28 +6,11 @@ import pickle
 from surface_roughness import Surface, SampleWindow, roughness, roughness_map
 import numpy as np
 import matplotlib.pyplot as plt
-radius=1
+radius=2
 w = SampleWindow(is_circle=True,radius=radius)
-# files = [r'scripts\example_surface.stl']
-# files = [r'X:\20220113_surface_sampling_samples\Hydrostone_BD_results\BD_113_1a+2a.stl']
-# files = glob.glob("X:/20220113_surface_sampling_samples/Hydrostone_BD_results/BD_31/*.stl")
-# files = [r'X:/20220113_surface_sampling_samples/20220823_beza_direct_tension_top_1_1.stl']
-# files = glob.glob("X:/20220113_surface_sampling_samples/*.stl")
-# files = glob.glob("X:/20220113_surface_sampling_samples/MontneyBD2018/*.stl")
-# files = glob.glob("X:/20220113_surface_sampling_samples/MontneyBD2018/BD_montney_MG3_2_2LG4_top_intact_1_1_cropped.stl")
-#files = glob.glob('C:/Users/emags/OneDrive - University of Toronto/Roughness_maps/*.stl')
-# files = glob.glob("X:/20220113_surface_sampling_samples/Hydrostone_BD_results/*.stl")
-# files = glob.glob("X:/20220113_surface_sampling_samples/MontneyCCNBD2018/Petronas_M3-3-No2_CCNBD_side1_trimmed.stl")
-# files.extend(glob.glob("X:/20220113_surface_sampling_samples/MontneyCCNBD2018/*.stl"))
-# files.extend(glob.glob("X:/20220113_surface_sampling_samples/Hydrostone_BD_results/*.stl"))
-# files.extend(glob.glob("X:/20220113_surface_sampling_samples/Hydrostone_BD_results/BD_31/*.stl"))
-# files.extend(glob.glob("X:/20220113_surface_sampling_samples/PLT/*.stl"))
-# files.extend(glob.glob("X:/20220113_surface_sampling_samples/roadcut_results/*.stl"))
-# files = glob.glob("X:/20220113_surface_sampling_samples/PLT/*.stl")
-# files = glob.glob("X:/20220113_surface_sampling_samples/roadcut_results/*.stl")
-#files = glob.glob("C:/Users/emags/OneDrive - University of Toronto/20230700_megablock/*.stl")
-files = ["C:/Users/emags/OneDrive - University of Toronto/20230700_megablock/20230713_8d-1_BD_fracture_1_1_side_b.stl"]
- 
+
+files = glob.glob("C:/Users/emags/OneDrive - University of Toronto/20230717_ccnbd_roughness/*.stl")
+
 def generate_map(surface,file,method,submethods,w:SampleWindow):
     print(f"Analyzing {file}")
     if os.path.exists(f'{file}_r{radius}.pickle'):

@@ -14,8 +14,12 @@ if platform.system() == "Windows":
     if debug:
         cpp_args.extend(['/Od','/Zi'])
         linkargs.extend(['/DEBUG'])
-else:
+elif platform.system() == "Linux":
     cpp_args = ['-fopenmp']
+    linkargs = []
+else:
+    # disable openmp for non-linux/windows systems
+    cpp_args = []
     linkargs = []
     
  
@@ -47,7 +51,7 @@ roughness_cppimpl = Pybind11Extension(
 
 setup(
     name="surface-roughness",
-    version="0.0.1",
+    version="0.0.2",
     description="Surface roughness calculation with Python",
     long_description=(Path(__file__).parent/"README.md").read_text(),
     author="Earl Magsipoc",
