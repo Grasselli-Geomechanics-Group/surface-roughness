@@ -9,13 +9,13 @@ debug = False
 
 
 if platform.system() == "Windows":
-    cpp_args=['/Od','/Zi','/openmp']
+    cpp_args=['/Od','/Zi','/openmp','/std:c++20']
     linkargs = []
     if debug:
         cpp_args.extend(['/Od','/Zi'])
         linkargs.extend(['/DEBUG'])
 elif platform.system() == "Linux":
-    cpp_args = ['-fopenmp']
+    cpp_args = ['-fopenmp', '-std=c++20']
     linkargs = []
 else:
     # disable openmp for non-linux/windows systems
