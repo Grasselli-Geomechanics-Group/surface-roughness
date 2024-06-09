@@ -30,7 +30,7 @@ elif platform.system() == "Linux":
     linkargs = []
 else:
     # disable openmp for non-linux/windows systems
-    cpp_args = ['-std=c++20', -'O3']
+    cpp_args = ['-std=c++20', '-O3']
     linkargs = []
     
  
