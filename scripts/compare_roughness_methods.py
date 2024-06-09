@@ -4,10 +4,11 @@ import numpy as np
 from surface_roughness import Surface
 
 plt.rcParams.update({'font.size': 11})
-file = r'X:\20220113_surface_sampling_samples\serpentinite\140513_BT_NaturalReplicas_Serpentinite_cropped.stl'
+file = r'tests/example_surface.stl'
 s = Surface(file)
 
 s.evaluate_delta_t()
+
 delta_t_az = s.delta_t("az")
 delta_t = s.delta_t("delta_t")
 # deltastar_t = s.delta_t("delta*_t")

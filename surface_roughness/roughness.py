@@ -316,7 +316,7 @@ class Surface:
         self._nominal_areas = np.zeros([self.n_triangles])
         v1v0 = np.array([self.points[tri_i[1]] - self.points[tri_i[0]] for tri_i in self.triangles])
         v2v0 = np.array([self.points[tri_i[2]] - self.points[tri_i[0]] for tri_i in self.triangles])
-        self._areas = np.linalg.norm(np.cross(v1v0,v2v0,axis=1),axis=1)
+        self._areas = np.linalg.norm(np.cross(v1v0,v2v0,axis=1),axis=1) / 2
         v1v0[:,2] = 0
         v2v0[:,2] = 0
         self._nominal_areas = np.linalg.norm(np.cross(v1v0,v2v0,axis=1),axis=1)
