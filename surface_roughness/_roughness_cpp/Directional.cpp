@@ -15,7 +15,8 @@ Directional::Directional(
     Eigen::MatrixX3i triangles) :
 	aligned(false),
 	points(points),
-	triangles(triangles)
+	triangles(triangles),
+    settings_(Directional::Setting())
 {
     this->alignBestFit();
     calculateNormals(this->points,this->triangles,this->normals);
@@ -26,7 +27,8 @@ Directional::Directional(
     Eigen::MatrixX3d points, 
     Eigen::MatrixX3i triangles,
     Eigen::ArrayXi selected_triangles):
-	aligned(false)
+	aligned(false),
+    settings_(Directional::Setting())
 {
 	select_triangles(this->points,points,this->triangles,triangles,selected_triangles);
     this->alignBestFit();

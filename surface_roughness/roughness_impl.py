@@ -65,7 +65,7 @@ class DirRoughnessBase:
         :rtype: pandas.Dataframe
         """
         
-        df_data = {key:self[key][:,0] for key in self.impl.result_keys() if not key is 'az' and self[key].shape[1] == 1}
+        df_data = {key:self[key][:,0] for key in self.impl.result_keys() if key != 'az' and self[key].shape[1] == 1}
         # If multidimensional, label each column
         [df_data.update({
             f'{key}_{i}':col for i,col in enumerate(self[key].T)

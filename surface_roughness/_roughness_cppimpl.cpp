@@ -121,9 +121,9 @@ private:
 
 PYBIND11_MODULE(_roughness_cppimpl,m) {
     py::class_<DirectionalSetting>(m,"_cppDirectionalSetting_impl")
-        .def(py::init<>())
-        .def("__setitem__",&DirectionalSetting::set)
-        .def("__getitem__",&DirectionalSetting::get);
+        .def("__setitem__",&DirectionalSetting::set_)
+        .def("__getitem__",&DirectionalSetting::get)
+        .def("keys",&DirectionalSetting::keys);
  
     py::class_<Directional,PyDirectional>(m,"_cppDirectional_impl")
         .def(py::init<Eigen::MatrixX3d,Eigen::MatrixX3i>())
