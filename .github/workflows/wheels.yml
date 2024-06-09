@@ -1,9 +1,9 @@
 name: Build
 
 on: 
-  # push:
-  #   branches:
-  #     - 'main'
+  push:
+    branches:
+      - 'main'
   release:
     types:
       - published
@@ -13,38 +13,29 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-20.04, windows-2019, macos-11]
+        os: [ubuntu-latest, windows-latest, macos-13, macos-14]
 
     steps:
-      - uses: actions/checkout@v3
-        with:
-          submodules: recursive
+      - uses: actions/checkout@v4
 
       - name: Build wheels
-        uses: pypa/cibuildwheel@v2.8.1
-        env:
-          CIBW_ARCHS: "auto64"
-          CIBW_SKIP: "*-musllinux* pp37-macosx_x86_64 pp38-macosx_x86_64 pp39-macosx_x86_64"
-        #    ...
-        # with:
-        #   package-dir: .
-        #   output-dir: wheelhouse
-        #   config-file: "{package}/pyproject.toml"
+        uses: pypa/cibuildwheel@v2.18.1
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           path: ./wheelhouse/*.whl
 
   build_sdist:
     name: Build source distribution
     runs-on: ubuntu-latest
+    if: github.event_name == 'release' && github.event.action == 'published'
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Build sdist
         run: pipx run build --sdist
       
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           path: dist/*.tar.gz
   
@@ -56,16 +47,11 @@ jobs:
     # alternatively, to publish when a GitHub Release is created, use the following rule:
     if: github.event_name == 'release' && github.event.action == 'published'
     steps:
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           # unpacks default artifact into dist/
           # if `name: artifact` is omitted, the action will create extra parent dir
           name: artifact
           path: dist
 
-      - uses: pypa/gh-action-pypi-publish@v1.5.0
-        with:
-          user: __token__
-          password: ${{ secrets.PYPI_API_TOKEN }}
-          # password: ${{ secrets.TEST_PYPI_API_TOKEN }}
-          # repository_url: https://test.pypi.org/legacy/
+      - uses: pypa/gh-action-pypi-publish@release/v1

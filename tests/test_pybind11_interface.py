@@ -2,12 +2,17 @@ import unittest
 
 import numpy as np
 
-from surface_roughness import Surface
+from surface_roughness import (
+    Surface, 
+    SampleWindow
+)
+
 from surface_roughness.roughness_impl import (
     _cppTINBasedRoughness,
     _cppTINBasedRoughness_Settings_impl,
     _cppDirectionalRoughness
 )
+from surface_roughness.sampling import RoughnessMap
 
 class TestDirectionalSetting(unittest.TestCase):
     def setUp(self):
@@ -35,9 +40,9 @@ class TestTINBasedRoughness(unittest.TestCase):
         self.cppimpl.evaluate()        
 
     def test_setting_initialize(self):
-        self.assertAlmostEqual(72,self.surface._delta_t.settings['n_az'])
-        self.assertAlmostEqual(0,self.surface._delta_t.settings['az_offset'])
-        self.assertAlmostEqual(200,self.surface._delta_t.settings['min_triangles'])
+        self.assertAlmostEqual(72,self.cppimpl.settings['n_az'])
+        self.assertAlmostEqual(0,self.cppimpl.settings['az_offset'])
+        self.assertAlmostEqual(200,self.cppimpl.settings['min_triangles'])
 
     def test_result_keys(self):
         self.assertListEqual(
@@ -104,9 +109,9 @@ class TestDirectionalRoughness(unittest.TestCase):
         self.cppimpl.evaluate()        
 
     def test_setting_initialize(self):
-        self.assertAlmostEqual(72,self.surface._thetamax_cp1.settings['n_az'])
-        self.assertAlmostEqual(0,self.surface._thetamax_cp1.settings['az_offset'])
-        self.assertAlmostEqual(200,self.surface._thetamax_cp1.settings['min_triangles'])
+        self.assertAlmostEqual(72,self.cppimpl.settings['n_az'])
+        self.assertAlmostEqual(0,self.cppimpl.settings['az_offset'])
+        self.assertAlmostEqual(200,self.cppimpl.settings['min_triangles'])
 
     def test_result_keys(self):
         self.assertListEqual(
@@ -153,7 +158,9 @@ class TestDirectionalRoughness(unittest.TestCase):
             self.assertAlmostEqual(test_max[i], maxvec[i])
             
     def test_area(self):
+        print(self.surface.area)
         self.assertAlmostEqual(self.cppimpl.total_area, self.surface.area)
+        
     
     def test_result(self):
         self.surface.evaluate_thetamax_cp1(impl='py')
@@ -168,3 +175,31 @@ class TestDirectionalRoughness(unittest.TestCase):
         az = np.array(self.cppimpl['az'])[:,0]
         for i in range(72):
             self.assertAlmostEqual(np.radians(i*5),az[i],msg=f'at {i}')
+
+class TestRoughnessMap(unittest.TestCase):
+    def setUp(self):
+        self.window = SampleWindow(is_circle=True, radius=2.5)
+        self.surface = Surface('tests/example_surface.stl')
+        self.map = RoughnessMap(
+            self.surface,
+            'delta_t',
+            self.window,
+            1,1,0,0)
+        
+    def test_sampling(self):
+        self.map.sample()
+        self.assertEqual(518,len(self.map.samples))
+        self.assertAlmostEqual(22.726952268535697, self.map.samples[0,0])
+        self.assertAlmostEqual(7.00697149, self.map.samples[0,1])
+        
+    def test_evaluation(self):
+        self.map.sample()
+        self.map.evaluate()
+        self.map.analyze_directional_roughness('delta_t')
+        
+        for orientation in self.map.final_orientations:
+            self.assertAlmostEqual(1., orientation[2],places=5)
+        
+        self.assertAlmostEqual(6.60086672, self.map.total_areas[0])
+        self.assertAlmostEqual(5.38515774, self.map.roughness_data['delta_t'][0,0])
+        self.assertAlmostEqual(5.77771409, self.map.roughness_data['delta_t'][517,71])

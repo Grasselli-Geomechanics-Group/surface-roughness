@@ -5,11 +5,11 @@ from pathlib import Path
 
 import platform
 
-debug = True
-openmp = False
+debug = False
+openmp = True
 
 if platform.system() == "Windows":
-    cpp_args=['/std:c++20']
+    cpp_args=['/std:c++20', '/MD']
     linkargs = []
     if debug:
         cpp_args.extend(['/Od','/Zi'])
@@ -21,12 +21,16 @@ if platform.system() == "Windows":
         
 elif platform.system() == "Linux":
     cpp_args = ['-std=c++20']
+    if debug:
+        cpp_args.extend(['-O3'])
+    else:
+        cpp_args.extend(['-O0'])
     if openmp:
         cpp_args.append('-fopenmp')
     linkargs = []
 else:
     # disable openmp for non-linux/windows systems
-    cpp_args = []
+    cpp_args = ['-std=c++20', -'O3']
     linkargs = []
     
  

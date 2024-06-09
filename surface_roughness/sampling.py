@@ -205,7 +205,7 @@ class RoughnessMap:
         }
 
     def _reorient_points(self,samples,verbose):
-        iter = tenumerate(list(samples)) if verbose else samples
+        iter = tenumerate(list(samples)) if verbose else enumerate(samples)
         p_in_sample = [None]*len(samples)
         for i,sample in iter:
             if np.any(sample):
