@@ -205,7 +205,7 @@ class RoughnessMap:
         }
 
     def _reorient_points(self,samples,verbose):
-        iter = tenumerate(list(samples)) if verbose else samples
+        iter = tenumerate(list(samples)) if verbose else enumerate(samples)
         p_in_sample = [None]*len(samples)
         for i,sample in iter:
             if np.any(sample):
@@ -236,7 +236,7 @@ class RoughnessMap:
             print("Sampling...")
         bounds = self.surface.bounds()
         n = (bounds[1,:] - bounds[0,:]) / self.sample_spacing
-        n = np.ceil(n).astype(np.int)+1
+        n = np.ceil(n).astype(int)+1
         xpoints = np.linspace(
             bounds[0,0]+self.seed_left_offset,
             bounds[0,0]+self.seed_left_offset+self.sample_spacing*n[0],

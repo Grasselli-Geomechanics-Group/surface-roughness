@@ -2,7 +2,7 @@ from surface_roughness import Surface, SampleWindow, roughness_map
 import matplotlib.pyplot as plt
 
 w = SampleWindow(is_circle=True,radius=2.5)
-file_path = 'example_surface.stl'
+file_path = 'tests/example_surface.stl'
 def generate_map(surface,method,submethods,w:SampleWindow):
     map = roughness_map(surface,method,w,1,1)
     map.sample(verbose=True)

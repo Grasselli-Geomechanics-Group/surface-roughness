@@ -7,3 +7,11 @@ requires = [
   "scikit-build>=0.12",
   "numpy"
 ]
+
+[tool.cibuildwheel]
+test-requires = "pytest"
+test-command = "pytest {project}/tests"
+
+archs = ["auto64"]
+skip = "*-musllinux* pp37-macosx_x86_64 pp38-macosx_x86_64 pp39-macosx_x86_64 pp10-macosx_x86_64"
+test-skip = "*musllinux* pp37-macosx_x86_64 pp38-macosx_x86_64 pp39-macosx_x86_64"

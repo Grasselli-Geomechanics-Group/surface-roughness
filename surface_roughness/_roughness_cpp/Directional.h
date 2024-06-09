@@ -6,13 +6,33 @@
 #include <string>
 #include <vector>
 #include <cmath>
-
+#include <initializer_list>
+#include <utility>
 #include <Eigen/Core>
 
 struct DirectionalSetting : public std::unordered_map<std::string,double>
 {
-    void set(std::string setting, double value) {if (this->find(setting) != this->end()) this->at(setting) = value;}
-    double get(std::string setting) {if (this->find(setting) != this->end()) return this->at(setting); else return std::nan("");}
+    DirectionalSetting() = delete;
+    DirectionalSetting(
+        std::initializer_list<std::pair<std::string, double>> settings) {
+        for (auto setting: settings) {
+            this->insert(setting);
+        }
+    }
+    void set_(std::string setting, double value) {
+        this->at(setting) = value;
+    }
+    double get(std::string setting) {
+        if (this->find(setting) != this->end()) 
+        return this->at(setting); 
+        else return std::nan("");
+    }
+    std::vector<std::string> keys() {
+        std::vector<std::string> keydata(this->size()); 
+        for (auto key: *this) 
+            {keydata.push_back(key.first);}
+        return keydata;
+    }
 };
 
 class Directional 
@@ -21,12 +41,11 @@ public:
     Directional(Eigen::MatrixX3d points, Eigen::MatrixX3i triangles);
     Directional(Eigen::MatrixX3d points, Eigen::MatrixX3i triangles, Eigen::ArrayXi selected_triangles);
     static DirectionalSetting Setting() {
-        DirectionalSetting setting;
-        setting.set("n_az",72.);
-        setting.set("az_offset",0.);
-        setting.set("min_triangles",200);
-
-        return setting;
+        return DirectionalSetting({
+            std::make_pair("n_az", 72.),
+            std::make_pair("az_offset",0.),
+            std::make_pair("min_triangles", 200)
+        });
     }
     virtual void evaluate(DirectionalSetting setting, bool verbose, std::string file) = 0;
     Eigen::ArrayXXd operator[](std::string key) {return parameters[key];}
@@ -41,6 +60,7 @@ public:
 
 	Eigen::Vector3d get_final_orientation() { return final_orientation; }
     std::vector<std::string> result_keys();
+    DirectionalSetting settings() {return settings_;}
 
 protected:
     Eigen::MatrixX3d points;

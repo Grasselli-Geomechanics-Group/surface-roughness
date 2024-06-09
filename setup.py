@@ -6,20 +6,31 @@ from pathlib import Path
 import platform
 
 debug = False
-
+openmp = True
 
 if platform.system() == "Windows":
-    cpp_args=['/Od','/Zi','/openmp']
+    cpp_args=['/std:c++20', '/MD']
     linkargs = []
     if debug:
         cpp_args.extend(['/Od','/Zi'])
         linkargs.extend(['/DEBUG'])
+    else:
+        cpp_args.extend(['/O2', '/Ot'])
+    if openmp:
+        cpp_args.append('/openmp')
+        
 elif platform.system() == "Linux":
-    cpp_args = ['-fopenmp']
+    cpp_args = ['-std=c++20']
+    if debug:
+        cpp_args.extend(['-O3'])
+    else:
+        cpp_args.extend(['-O0'])
+    if openmp:
+        cpp_args.append('-fopenmp')
     linkargs = []
 else:
     # disable openmp for non-linux/windows systems
-    cpp_args = []
+    cpp_args = ['-std=c++20', -'O3']
     linkargs = []
     
  
@@ -51,7 +62,7 @@ roughness_cppimpl = Pybind11Extension(
 
 setup(
     name="surface-roughness",
-    version="0.0.2",
+    version="0.0.3",
     description="Surface roughness calculation with Python",
     long_description=(Path(__file__).parent/"README.md").read_text(),
     author="Earl Magsipoc",
@@ -77,5 +88,5 @@ setup(
     ],
     cmdclass={"build_ext":build_ext},
     zip_safe=False,
-    python_requires=">=3.7"
+    python_requires=">=3.9"
 )
