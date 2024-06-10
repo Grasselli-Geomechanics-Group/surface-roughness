@@ -21,12 +21,16 @@ if platform.system() == "Windows":
         
 elif platform.system() == "Linux":
     cpp_args = ['-std=c++20']
+    linkargs = []
     if debug:
-        cpp_args.extend(['-O3'])
-    else:
         cpp_args.extend(['-O0'])
+    else:
+        cpp_args.extend(['-O3'])
     if openmp:
-        cpp_args.append('-fopenmp')
+        pass
+        # TODO: non-monotonic dynamic loop in gcc introduced recently causing issues with linux build
+        # cpp_args.append('-fopenmp')
+        # linkargs.append('-lgomp')
     linkargs = []
 else:
     # disable openmp for non-linux/windows systems
