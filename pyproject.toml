@@ -12,5 +12,5 @@ requires = [
 test-command = "python -m unittest discover {project}/tests"
 
 archs = ["auto64"]
-skip = "*-musllinux* pp37-macosx_x86_64 pp38-macosx_x86_64 pp39-macosx_x86_64 pp10-macosx_x86_64"
-test-skip = "*musllinux* pp37-macosx_x86_64 pp38-macosx_x86_64 pp39-macosx_x86_64"
+skip = "*-musllinux* pp*"
+test-skip = "*musllinux* pp*"
