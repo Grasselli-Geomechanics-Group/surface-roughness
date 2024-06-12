@@ -1,6 +1,11 @@
 import glob
 from setuptools import setup
-from pybind11.setup_helpers import Pybind11Extension, build_ext
+from pybind11.setup_helpers import (
+    Pybind11Extension, 
+    build_ext, 
+    ParallelCompile, 
+    naive_recompile
+)
 from pathlib import Path
 
 import platform
@@ -8,34 +13,41 @@ import platform
 debug = False
 openmp = True
 
+ParallelCompile("NPY_NUM_BUILD_JOBS", needs_recompile=naive_recompile).install()
+
+cpp_args = []
+linkargs = []
+libs = []
+
 if platform.system() == "Windows":
-    cpp_args=['/std:c++20', '/MD']
-    linkargs = []
+    cpp_args.extend(['/std:c++20', '/MD'])
+    
     if debug:
         cpp_args.extend(['/Od','/Zi'])
         linkargs.extend(['/DEBUG'])
+        
     else:
         cpp_args.extend(['/O2', '/Ot'])
+        
     if openmp:
         cpp_args.append('/openmp')
         
 elif platform.system() == "Linux":
-    cpp_args = ['-std=c++20']
-    linkargs = []
+    cpp_args.extend(['-std=c++20'])
+    
     if debug:
         cpp_args.extend(['-O0'])
+        
     else:
         cpp_args.extend(['-O3'])
+        
     if openmp:
-        pass
-        # TODO: non-monotonic dynamic loop in gcc introduced recently causing issues with linux build
-        # cpp_args.append('-fopenmp')
-        # linkargs.append('-lgomp')
-    linkargs = []
+        cpp_args.append('-fopenmp')
+        libs.append('gomp')
+        
 else:
     # disable openmp for non-linux/windows systems
-    cpp_args = ['-std=c++20', '-O3']
-    linkargs = []
+    cpp_args.extend(['-std=c++20', '-O3'])
     
  
 roughness_cppimpl_sources = [
@@ -61,7 +73,8 @@ roughness_cppimpl = Pybind11Extension(
     include_dirs=roughness_cppimpl_includes,
     language='c++',
     extra_compile_args=cpp_args,
-    extra_link_args=linkargs
+    extra_link_args=linkargs,
+    libraries=libs
 )
 
 setup(
@@ -77,7 +90,6 @@ setup(
         'surface_roughness':'surface_roughness',
         'surface_roughness._roughness_pyimpl':'surface_roughness/_roughness_pyimpl'},
     packages=['surface_roughness','surface_roughness._roughness_pyimpl'],
-    # ext_package='surface_roughness',
     ext_modules=[roughness_cppimpl],
     install_requires=[
         'scipy',
