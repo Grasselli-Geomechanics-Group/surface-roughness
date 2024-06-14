@@ -82,6 +82,7 @@ setup(
     version="0.0.3",
     description="Surface roughness calculation with Python",
     long_description=(Path(__file__).parent/"README.md").read_text(),
+    long_description_content_type='text/markdown',
     author="Earl Magsipoc",
     author_email="e.magsipoc@mail.utoronto.ca",
     url="https://github.com/e-mags/pysurfaceroughness",
